@@ -1,0 +1,83 @@
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
+
+import { GlassSurface } from '@/components/glass/glass-surface';
+import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/ui/icon';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { BodySilhouette, type MeasurementZone } from './body-silhouette';
+
+const COPY: Record<MeasurementZone, { title: string; instructions: string }> = {
+  waistCm: {
+    title: 'Vita',
+    instructions:
+      'Misura il punto più stretto della vita, solitamente circa 2 dita sopra l’ombelico. Tieni il metro parallelo al pavimento, senza stringere, e respira normalmente prima di leggere il valore.',
+  },
+  chestCm: {
+    title: 'Petto',
+    instructions:
+      'Misura intorno al punto più sporgente del petto, passando il metro sotto le ascelle e mantenendolo parallelo al pavimento. Non trattenere il respiro.',
+  },
+  hipsCm: {
+    title: 'Fianchi',
+    instructions:
+      'Misura intorno al punto più largo di fianchi e glutei, con i piedi uniti e il metro ben orizzontale.',
+  },
+};
+
+export type MeasurementInfoModalProps = {
+  zone: MeasurementZone | null;
+  onClose: () => void;
+};
+
+export function MeasurementInfoModal({ zone, onClose }: MeasurementInfoModalProps) {
+  const theme = useTheme();
+  if (!zone) return null;
+  const copy = COPY[zone];
+
+  return (
+    <Modal visible={zone != null} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <GlassSurface level="overlay" radius={Radius.xlarge} style={styles.card}>
+            <View style={styles.header}>
+              <ThemedText type="subtitle">Come misurare: {copy.title}</ThemedText>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Icon name="close" size={22} color={theme.text} />
+              </Pressable>
+            </View>
+            <View style={styles.silhouetteWrap}>
+              <BodySilhouette zone={zone} color={theme.accent} outlineColor={theme.textTertiary} />
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              {copy.instructions}
+            </ThemedText>
+          </GlassSurface>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    padding: Spacing.four,
+  },
+  card: {
+    width: 300,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  silhouetteWrap: {
+    alignItems: 'center',
+  },
+});

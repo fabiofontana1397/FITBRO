@@ -1,86 +1,117 @@
-import { StyleSheet, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { MeasurementInfoModal } from '@/components/body/measurement-info-modal';
+import { QuickWeightSheet } from '@/components/body/quick-weight-sheet';
+import type { MeasurementZone } from '@/components/body/body-silhouette';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { PrimaryButton } from '@/components/ui/primary-button';
+import { InsightCard } from '@/components/ui/insight-card';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatTile } from '@/components/ui/stat-tile';
 import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { bodyHistory, latestSnapshot, percentChange, seriesOf } from '@/lib/mock';
+import { deltaFromPrevious, latestSnapshot, percentChange, seriesOf } from '@/lib/mock/body';
+import { currentUser } from '@/lib/mock/user';
+import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
+import { useBodyStore } from '@/store/body-store';
+
+const MEASUREMENTS: { zone: MeasurementZone; label: string }[] = [
+  { zone: 'waistCm', label: 'Vita' },
+  { zone: 'chestCm', label: 'Petto' },
+  { zone: 'hipsCm', label: 'Fianchi' },
+];
 
 export default function BodyScreen() {
   const theme = useTheme();
-  const latest = latestSnapshot();
+  const entries = useBodyStore((s) => s.entries);
+  const photos = useBodyStore((s) => s.photos);
+  const addWeightEntry = useBodyStore((s) => s.addWeightEntry);
+  const addPhoto = useBodyStore((s) => s.addPhoto);
 
-  const measurements = [
-    { label: 'Vita', value: `${latest.waistCm} cm`, key: 'waistCm' as const },
-    { label: 'Petto', value: `${latest.chestCm} cm`, key: 'chestCm' as const },
-    { label: 'Fianchi', value: `${latest.hipsCm} cm`, key: 'hipsCm' as const },
-  ];
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [infoZone, setInfoZone] = useState<MeasurementZone | null>(null);
+
+  const latest = latestSnapshot(entries);
+  const weightDelta = deltaFromPrevious(entries, 'weightKg');
+  const toGoal = latest.weightKg - currentUser.targetWeightKg;
+  const photoInsight = generatePhotoInsight(photos, entries);
+
+  const pickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [3, 4],
+    });
+    if (!result.canceled && result.assets[0]) {
+      addPhoto(result.assets[0].uri);
+    }
+  };
 
   return (
     <ScreenScroll>
       <ScreenHeader eyebrow="Composizione corporea" title="Corpo" />
 
+      <GlassSurface level="card" radius={Radius.large} style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <View>
+            <View style={styles.heroWeightRow}>
+              <ThemedText type="hero">{latest.weightKg.toFixed(1)}</ThemedText>
+              <ThemedText type="subtitle" themeColor="textSecondary">
+                kg
+              </ThemedText>
+            </View>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {weightDelta === 0 ? 'stabile da ieri' : `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg da ieri`} ·{' '}
+              {Math.abs(toGoal).toFixed(1)} kg {toGoal > 0 ? 'dall’obiettivo' : 'oltre l’obiettivo'}
+            </ThemedText>
+          </View>
+          <Pressable onPress={() => setQuickAddOpen(true)} style={[styles.quickAddButton, { backgroundColor: theme.accent }]}>
+            <Icon name="plus" size={20} color={theme.onAccent} />
+          </Pressable>
+        </View>
+        <TrendChart data={seriesOf(entries, 'weightKg')} width={296} height={90} color={theme.accent} />
+      </GlassSurface>
+
       <View style={styles.statsRow}>
-        <StatTile
-          label="Peso"
-          value={latest.weightKg.toFixed(1)}
-          unit="kg"
-          trend={percentChange('weightKg')}
-          trendGoodDirection="down"
-          sparkline={seriesOf('weightKg')}
-        />
         <StatTile
           label="Massa grassa"
           value={latest.bodyFatPct.toFixed(1)}
           unit="%"
-          trend={percentChange('bodyFatPct')}
+          trend={percentChange(entries, 'bodyFatPct')}
           trendGoodDirection="down"
-          sparkline={seriesOf('bodyFatPct')}
+          sparkline={seriesOf(entries, 'bodyFatPct')}
         />
-      </View>
-      <View style={styles.statsRow}>
         <StatTile
           label="Massa muscolare"
           value={latest.muscleMassKg.toFixed(1)}
           unit="kg"
-          trend={percentChange('muscleMassKg')}
-          sparkline={seriesOf('muscleMassKg')}
+          trend={percentChange(entries, 'muscleMassKg')}
+          sparkline={seriesOf(entries, 'muscleMassKg')}
         />
-        <StatTile
-          label="FC a riposo"
-          value={`${latest.restingHeartRate}`}
-          unit="bpm"
-          trend={percentChange('restingHeartRate')}
-          trendGoodDirection="down"
-          sparkline={seriesOf('restingHeartRate')}
-        />
-      </View>
-
-      <View>
-        <SectionHeader title="Andamento peso (12 settimane)" />
-        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, alignItems: 'center' }}>
-          <TrendChart data={seriesOf('weightKg')} width={280} height={110} color={theme.accent} />
-        </GlassSurface>
       </View>
 
       <View>
         <SectionHeader title="Misure" />
         <View style={{ gap: Spacing.three }}>
-          {measurements.map((m) => (
-            <GlassSurface key={m.key} level="card" radius={Radius.large}>
+          {MEASUREMENTS.map((m) => (
+            <GlassSurface key={m.zone} level="card" radius={Radius.large}>
               <View style={styles.measureRow}>
-                <Icon name="ruler" size={18} color={theme.textTertiary} />
-                <ThemedText type="small" style={{ flex: 1 }}>
-                  {m.label}
-                </ThemedText>
-                <ThemedText type="smallBold">{m.value}</ThemedText>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <ThemedText type="small">{m.label}</ThemedText>
+                  <ThemedText type="smallBold">{latest[m.zone]} cm</ThemedText>
+                </View>
+                <Pressable onPress={() => setInfoZone(m.zone)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.backgroundElement }]}>
+                  <Icon name="info" size={16} color={theme.textSecondary} />
+                </Pressable>
               </View>
             </GlassSurface>
           ))}
@@ -88,27 +119,66 @@ export default function BodyScreen() {
       </View>
 
       <View>
-        <SectionHeader title="Confronto foto" />
-        <GlassSurface level="card" radius={Radius.large} style={styles.photoCard}>
-          <Icon name="camera" size={28} color={theme.textTertiary} />
-          <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-            Aggiungi una foto ogni settimana per confrontare i tuoi progressi nel tempo
-          </ThemedText>
-          <PrimaryButton label="Aggiungi foto" variant="outline" icon="camera" />
-        </GlassSurface>
+        <SectionHeader title="Foto progressi" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
+          {photos.map((photo) => (
+            <Image key={photo.id} source={{ uri: photo.uri }} style={styles.photoThumb} />
+          ))}
+          <Pressable onPress={pickPhoto} style={[styles.addPhotoTile, { borderColor: theme.border }]}>
+            <Icon name="camera" size={24} color={theme.textSecondary} />
+            <ThemedText type="caption" themeColor="textSecondary">
+              Aggiungi
+            </ThemedText>
+          </Pressable>
+        </ScrollView>
       </View>
 
-      <ThemedText type="caption" themeColor="textTertiary" style={{ textAlign: 'center' }}>
-        {bodyHistory.length} rilevazioni · sonno medio {(
-          bodyHistory.reduce((a, b) => a + b.sleepHours, 0) / bodyHistory.length
-        ).toFixed(1)}
-        h
-      </ThemedText>
+      {photoInsight ? (
+        <View>
+          <SectionHeader title="Confronto AI" />
+          <InsightCard icon="sparkle" tone="positive" headline="Cosa nota il coach AI" body={photoInsight} />
+        </View>
+      ) : photos.length === 0 ? (
+        <ThemedText type="caption" themeColor="textTertiary" style={{ textAlign: 'center' }}>
+          Aggiungi almeno 2 foto nel tempo per ricevere un confronto automatico dei tuoi progressi.
+        </ThemedText>
+      ) : null}
+
+      <QuickWeightSheet
+        visible={quickAddOpen}
+        currentWeightKg={latest.weightKg}
+        onClose={() => setQuickAddOpen(false)}
+        onSave={(weightKg) => addWeightEntry(weightKg)}
+      />
+      <MeasurementInfoModal zone={infoZone} onClose={() => setInfoZone(null)} />
     </ScreenScroll>
   );
 }
 
 const styles = StyleSheet.create({
+  heroCard: {
+    padding: Spacing.four,
+    gap: Spacing.three,
+    alignItems: 'center',
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  heroWeightRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  quickAddButton: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statsRow: {
     flexDirection: 'row',
     gap: Spacing.three,
@@ -119,9 +189,26 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     padding: Spacing.three,
   },
-  photoCard: {
-    padding: Spacing.four,
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.pill,
     alignItems: 'center',
-    gap: Spacing.three,
+    justifyContent: 'center',
+  },
+  photoThumb: {
+    width: 84,
+    height: 112,
+    borderRadius: Radius.medium,
+  },
+  addPhotoTile: {
+    width: 84,
+    height: 112,
+    borderRadius: Radius.medium,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
 });

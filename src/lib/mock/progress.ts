@@ -1,4 +1,4 @@
-import type { GoalProgress, Insight } from './types';
+import type { Insight } from './types';
 
 export const insights: Insight[] = [
   {
@@ -25,13 +25,6 @@ export const insights: Insight[] = [
     headline: 'Volume sala pesi stabile',
     body: 'Il volume settimanale su push/pull/leg è costante da 3 settimane: puoi iniziare a introdurre un piccolo sovraccarico progressivo.',
   },
-];
-
-export const goalProgress: GoalProgress[] = [
-  { label: 'Peso obiettivo', progress: 0.78, detail: '78.6 → 78 kg' },
-  { label: 'Massa grassa', progress: 0.64, detail: '15.7% → 13%' },
-  { label: 'Volume sala pesi', progress: 0.55, detail: 'Fase di accumulo' },
-  { label: 'Passo 10K', progress: 0.42, detail: '4’57″/km → 4’30″/km' },
 ];
 
 export const correlationNote =

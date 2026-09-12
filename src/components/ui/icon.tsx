@@ -54,6 +54,14 @@ const ICONS = {
   settings: { set: 'ion', name: 'settings-outline' },
   medal: { set: 'mci', name: 'medal-outline' },
   arrowBack: { set: 'ion', name: 'chevron-back' },
+  search: { set: 'ion', name: 'search' },
+  send: { set: 'ion', name: 'send' },
+  chatBubble: { set: 'ion', name: 'chatbubble-ellipses' },
+  minus: { set: 'ion', name: 'remove-circle-outline' },
+  addCircle: { set: 'ion', name: 'add-circle' },
+  trash: { set: 'ion', name: 'trash-outline' },
+  footsteps: { set: 'mci', name: 'shoe-print' },
+  moon: { set: 'ion', name: 'moon' },
 } as const satisfies Record<string, { set: 'mci' | 'ion'; name: MCIName | IonName }>;
 
 export type IconName = keyof typeof ICONS;

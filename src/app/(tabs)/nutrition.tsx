@@ -1,139 +1,172 @@
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { FoodSearchModal } from '@/components/nutrition/food-search-modal';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
-import { Icon, type IconName } from '@/components/ui/icon';
+import { Icon } from '@/components/ui/icon';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
-import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { currentUser, todaysMeals, totalsFor, weeklyCalorieSeries, weeklyProteinSeries } from '@/lib/mock';
+import { daysAgoISO } from '@/lib/mock/dates';
+import { findFood } from '@/lib/mock/food-database';
+import { currentUser } from '@/lib/mock/user';
+import {
+  entriesForSlot,
+  macrosForEntry,
+  MEAL_SLOTS,
+  sumMacros,
+  targetsForSlot,
+  useNutritionStore,
+  type MealSlot,
+} from '@/store/nutrition-store';
 
 export default function NutritionScreen() {
   const theme = useTheme();
-  const totals = totalsFor(todaysMeals);
-  const calorieProgress = totals.calories / currentUser.dailyCalorieTarget;
+  const today = daysAgoISO(0);
+  const entries = useNutritionStore((s) => s.entries);
+  const removeEntry = useNutritionStore((s) => s.removeEntry);
+  const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
 
-  const macros: { key: 'proteinG' | 'carbsG' | 'fatsG'; label: string; icon: IconName; color: string; target: number }[] = [
-    { key: 'proteinG', label: 'Proteine', icon: 'protein', color: theme.accent, target: currentUser.macroTargetsG.protein },
-    { key: 'carbsG', label: 'Carboidrati', icon: 'carbs', color: theme.success, target: currentUser.macroTargetsG.carbs },
-    { key: 'fatsG', label: 'Grassi', icon: 'fats', color: theme.warning, target: currentUser.macroTargetsG.fats },
+  const todaysEntries = entries.filter((e) => e.date === today);
+  const totals = sumMacros(todaysEntries);
+  const calorieProgress = totals.kcal / currentUser.dailyCalorieTarget;
+
+  const macroRings: { key: 'protein' | 'carbs' | 'fats'; label: string; icon: 'protein' | 'carbs' | 'fats'; color: string; target: number }[] = [
+    { key: 'protein', label: 'Proteine', icon: 'protein', color: theme.accent, target: currentUser.macroTargetsG.protein },
+    { key: 'carbs', label: 'Carbo', icon: 'carbs', color: theme.success, target: currentUser.macroTargetsG.carbs },
+    { key: 'fats', label: 'Grassi', icon: 'fats', color: theme.warning, target: currentUser.macroTargetsG.fats },
   ];
 
   return (
     <ScreenScroll>
       <ScreenHeader eyebrow="Bilancio energetico" title="Nutrizione" />
 
-      <GlassSurface level="card" radius={Radius.large} style={styles.calorieCard}>
-        <View style={styles.calorieRow}>
-          <ProgressRing size={104} strokeWidth={10} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-            <ThemedText type="title">{totals.calories}</ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              / {currentUser.dailyCalorieTarget} kcal
-            </ThemedText>
-          </ProgressRing>
-          <View style={{ flex: 1, gap: Spacing.two }}>
-            {macros.map((macro) => {
-              const value = totals[macro.key];
-              const progress = Math.min(value / macro.target, 1);
-              return (
-                <View key={macro.key} style={styles.macroRow}>
+      <GlassSurface level="card" radius={Radius.large} style={styles.heroCard}>
+        <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
+          <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            / {currentUser.dailyCalorieTarget} kcal
+          </ThemedText>
+        </ProgressRing>
+        <View style={styles.macroRingsRow}>
+          {macroRings.map((macro) => {
+            const value = totals[macro.key];
+            const progress = Math.min(value / macro.target, 1);
+            return (
+              <View key={macro.key} style={styles.macroRingCol}>
+                <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
                   <Icon name={macro.icon} size={16} color={macro.color} />
-                  <ThemedText type="caption" style={{ width: 88 }}>
-                    {macro.label}
-                  </ThemedText>
-                  <View style={[styles.macroTrack, { backgroundColor: theme.backgroundElement }]}>
-                    <View style={[styles.macroFill, { width: `${progress * 100}%`, backgroundColor: macro.color }]} />
-                  </View>
-                  <ThemedText type="caption" themeColor="textSecondary" style={{ width: 64, textAlign: 'right' }}>
-                    {value}/{macro.target}g
-                  </ThemedText>
-                </View>
-              );
-            })}
-          </View>
+                </ProgressRing>
+                <ThemedText type="caption" style={{ marginTop: 4 }}>
+                  {Math.round(value)}/{macro.target}g
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {macro.label}
+                </ThemedText>
+              </View>
+            );
+          })}
         </View>
       </GlassSurface>
 
       <View>
-        <SectionHeader title="Pasti di oggi" />
+        <SectionHeader title="I tuoi pasti" />
         <View style={{ gap: Spacing.three }}>
-          {todaysMeals.map((meal) => (
-            <GlassSurface key={meal.id} level="card" radius={Radius.large}>
-              <View style={styles.mealRow}>
-                <View style={{ width: 52 }}>
-                  <ThemedText type="smallBold">{meal.time}</ThemedText>
+          {MEAL_SLOTS.map((meta) => {
+            const slotEntries = entriesForSlot(entries, meta.id, today);
+            const slotTotals = sumMacros(slotEntries);
+            const target = targetsForSlot(meta.id);
+            const progress = target.kcal ? Math.min(slotTotals.kcal / target.kcal, 1) : 0;
+
+            return (
+              <GlassSurface key={meta.id} level="card" radius={Radius.large} style={styles.mealCard}>
+                <View style={styles.mealHeader}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <ThemedText type="smallBold">{meta.label}</ThemedText>
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {meta.time} · {Math.round(slotTotals.kcal)}/{Math.round(target.kcal)} kcal
+                    </ThemedText>
+                  </View>
+                  <Pressable onPress={() => setActiveSlot(meta.id)} style={[styles.addButton, { backgroundColor: theme.accentSoft }]}>
+                    <Icon name="plus" size={18} color={theme.accent} />
+                  </Pressable>
                 </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <ThemedText type="smallBold">{meal.name}</ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {meal.items.join(', ')}
-                  </ThemedText>
+
+                <View style={[styles.macroTrack, { backgroundColor: theme.backgroundElement }]}>
+                  <View style={[styles.macroFill, { width: `${progress * 100}%`, backgroundColor: theme.accent }]} />
                 </View>
-                <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                  {meal.calories}
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {' '}
-                    kcal
+
+                {slotEntries.length > 0 ? (
+                  <View style={{ gap: Spacing.one }}>
+                    {slotEntries.map((entry) => {
+                      const food = findFood(entry.foodId);
+                      const m = macrosForEntry(entry);
+                      return (
+                        <View key={entry.id} style={styles.foodRow}>
+                          <ThemedText type="caption" style={{ flex: 1 }}>
+                            {food?.name ?? entry.foodId} · {entry.grams}g
+                          </ThemedText>
+                          <ThemedText type="caption" themeColor="textSecondary">
+                            {Math.round(m.kcal)} kcal
+                          </ThemedText>
+                          <Pressable onPress={() => removeEntry(entry.id)} hitSlop={8}>
+                            <Icon name="close" size={14} color={theme.textTertiary} />
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <ThemedText type="caption" themeColor="textTertiary">
+                    Nessun alimento registrato
                   </ThemedText>
-                </ThemedText>
-              </View>
-            </GlassSurface>
-          ))}
+                )}
+              </GlassSurface>
+            );
+          })}
         </View>
       </View>
 
-      <View>
-        <SectionHeader title="Trend settimanale" />
-        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three }}>
-          <View style={styles.trendRow}>
-            <View style={{ gap: 4 }}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Calorie medie
-              </ThemedText>
-              <ThemedText type="subtitle">
-                {Math.round(weeklyCalorieSeries.reduce((a, b) => a + b, 0) / weeklyCalorieSeries.length)}
-              </ThemedText>
-            </View>
-            <TrendChart data={weeklyCalorieSeries} width={150} height={48} color={theme.accent} />
-          </View>
-          <View style={[styles.trendRow, { marginTop: Spacing.three }]}>
-            <View style={{ gap: 4 }}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Proteine medie
-              </ThemedText>
-              <ThemedText type="subtitle">
-                {Math.round(weeklyProteinSeries.reduce((a, b) => a + b, 0) / weeklyProteinSeries.length)} g
-              </ThemedText>
-            </View>
-            <TrendChart data={weeklyProteinSeries} width={150} height={48} color={theme.success} />
-          </View>
-        </GlassSurface>
-      </View>
+      <FoodSearchModal visible={activeSlot != null} slot={activeSlot} date={today} onClose={() => setActiveSlot(null)} />
     </ScreenScroll>
   );
 }
 
 const styles = StyleSheet.create({
-  calorieCard: {
-    padding: Spacing.three,
-  },
-  calorieRow: {
-    flexDirection: 'row',
+  heroCard: {
+    padding: Spacing.four,
     alignItems: 'center',
     gap: Spacing.four,
   },
-  macroRow: {
+  macroRingsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  macroRingCol: {
     alignItems: 'center',
+  },
+  mealCard: {
+    padding: Spacing.three,
     gap: Spacing.two,
   },
+  mealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   macroTrack: {
-    flex: 1,
-    height: 6,
+    height: 5,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -141,15 +174,9 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
-  mealRow: {
+  foodRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-  },
-  trendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.two,
   },
 });

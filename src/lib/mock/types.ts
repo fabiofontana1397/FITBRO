@@ -13,49 +13,6 @@ export type UserProfile = {
   hydrationTargetMl: number;
 };
 
-export type SetEntry = { reps: number; weightKg: number };
-
-export type ExerciseEntry = {
-  name: string;
-  sets: SetEntry[];
-};
-
-export type WorkoutMetrics = {
-  distanceKm?: number;
-  paceMinPerKm?: number;
-  avgHeartRate?: number;
-  elevationM?: number;
-  laps?: number;
-  volumeKg?: number;
-  sets?: number;
-};
-
-export type Workout = {
-  id: string;
-  sport: Sport;
-  title: string;
-  date: string; // ISO date
-  durationMin: number;
-  completed: boolean;
-  planned: boolean;
-  intensity: 'low' | 'moderate' | 'high';
-  metrics: WorkoutMetrics;
-  exercises?: ExerciseEntry[];
-  caloriesBurned: number;
-};
-
-export type Meal = {
-  id: string;
-  date: string;
-  time: string;
-  name: string;
-  items: string[];
-  calories: number;
-  proteinG: number;
-  carbsG: number;
-  fatsG: number;
-};
-
 export type BodyMetricSnapshot = {
   date: string;
   weightKg: number;
@@ -75,10 +32,4 @@ export type Insight = {
   tone: InsightTone;
   headline: string;
   body: string;
-};
-
-export type GoalProgress = {
-  label: string;
-  progress: number; // 0..1
-  detail: string;
 };

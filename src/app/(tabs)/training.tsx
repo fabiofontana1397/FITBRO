@@ -7,89 +7,132 @@ import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { SectionHeader } from '@/components/ui/section-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { StatTile } from '@/components/ui/stat-tile';
+import { ExerciseLogRow } from '@/components/training/exercise-log-row';
+import { WeekStrip } from '@/components/training/week-strip';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDayMonth, isToday, sportIcon, sportMeta, trainingLoadSeries, workouts } from '@/lib/mock';
+import { currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
+import { sportIcon, sportMeta } from '@/lib/mock/training';
 import type { Sport } from '@/lib/mock/types';
-
-const FILTERS: { value: Sport | 'all'; label: string }[] = [
-  { value: 'all', label: 'Tutti' },
-  { value: 'gym', label: 'Pesi' },
-  { value: 'functional', label: 'Functional' },
-  { value: 'running', label: 'Corsa' },
-  { value: 'swimming', label: 'Nuoto' },
-  { value: 'tennis', label: 'Tennis' },
-  { value: 'cycling', label: 'Ciclismo' },
-];
+import {
+  exerciseTopSetHistory,
+  planAdherence,
+  setsForExerciseOnDate,
+  templateById,
+  useTrainingStore,
+  type ExerciseSetLog,
+  type WorkoutTemplate,
+} from '@/store/training-store';
 
 export default function TrainingScreen() {
-  const theme = useTheme();
-  const [filter, setFilter] = useState<Sport | 'all'>('all');
+  const { plan, templates, logs, logSet } = useTrainingStore();
+  const weekDates = useMemo(() => currentWeekDates(), []);
+  const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
 
-  const filtered = useMemo(
-    () => workouts.filter((w) => filter === 'all' || w.sport === filter),
-    [filter]
-  );
-  const loadSeries = useMemo(() => trainingLoadSeries(7), []);
-  const completedThisWeek = workouts.filter((w) => w.completed).length;
-  const totalMinutes = workouts.filter((w) => w.completed).reduce((a, w) => a + w.durationMin, 0);
+  const planDay = plan[mondayIndex(new Date(selectedDate))];
+  const todayPlanDay = plan[mondayIndex(new Date())];
+  const { planned, done } = useMemo(() => planAdherence(plan, logs, 14), [plan, logs]);
 
   return (
     <ScreenScroll>
-      <ScreenHeader eyebrow="Multi-sport" title="Training" />
+      <ScreenHeader eyebrow="Scheda settimanale" title="Training" />
 
       <View style={styles.statsRow}>
-        <StatTile label="Sessioni" value={`${completedThisWeek}`} unit="ultimi 14gg" icon="check" />
+        <StatTile label="Aderenza piano" value={`${done}/${planned}`} unit="ultimi 14gg" icon="check" />
         <StatTile
-          label="Carico settimanale"
-          value={`${totalMinutes}`}
-          unit="min"
-          sparkline={loadSeries}
+          label="Oggi"
+          value={
+            todayPlanDay.type === 'workout'
+              ? templateById(templates, todayPlanDay.templateId)?.dayLabel ?? '—'
+              : todayPlanDay.type === 'cardio'
+                ? todayPlanDay.label
+                : 'Riposo'
+          }
+          icon={todayPlanDay.type === 'workout' ? 'gym' : todayPlanDay.type === 'cardio' ? sportIcon[todayPlanDay.sport] : 'moon'}
         />
       </View>
 
-      <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} scrollable />
+      <WeekStrip dates={weekDates} plan={plan} selectedDate={selectedDate} onSelect={setSelectedDate} />
 
-      <View>
-        <SectionHeader title={filter === 'all' ? 'Sessioni recenti' : sportMeta[filter].label} />
-        <View style={{ gap: Spacing.three }}>
-          {filtered.map((workout) => (
-            <GlassSurface key={workout.id} level="card" radius={Radius.large}>
-              <View style={styles.workoutRow}>
-                <View style={[styles.sportBadge, { backgroundColor: theme.accentSoft }]}>
-                  <Icon name={sportIcon[workout.sport]} size={20} color={theme.accent} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <ThemedText type="smallBold">{workout.title}</ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {isToday(workout.date) ? 'Oggi' : formatDayMonth(workout.date)} · {workout.durationMin} min
-                    {workout.metrics.distanceKm ? ` · ${workout.metrics.distanceKm} km` : ''}
-                    {workout.metrics.volumeKg ? ` · ${workout.metrics.volumeKg} kg volume` : ''}
-                  </ThemedText>
-                </View>
-                <StatusPill completed={workout.completed} planned={workout.planned} />
-              </View>
-            </GlassSurface>
-          ))}
-        </View>
-      </View>
+      {planDay.type === 'workout' ? (
+        <WorkoutDay
+          templateId={planDay.templateId}
+          date={selectedDate}
+          logs={logs}
+          templates={templates}
+          onAddSet={(exerciseId, reps, weightKg) => logSet(planDay.templateId, exerciseId, reps, weightKg, selectedDate)}
+        />
+      ) : planDay.type === 'cardio' ? (
+        <CardioDay label={planDay.label} sport={planDay.sport} durationMin={planDay.durationMin} />
+      ) : (
+        <RestDay />
+      )}
     </ScreenScroll>
   );
 }
 
-function StatusPill({ completed, planned }: { completed: boolean; planned: boolean }) {
-  const theme = useTheme();
-  const label = completed ? 'Fatto' : planned ? 'In programma' : 'Extra';
-  const color = completed ? theme.success : planned ? theme.accent : theme.textTertiary;
+function WorkoutDay({
+  templateId,
+  date,
+  logs,
+  templates,
+  onAddSet,
+}: {
+  templateId: string;
+  date: string;
+  logs: ExerciseSetLog[];
+  templates: WorkoutTemplate[];
+  onAddSet: (exerciseId: string, reps: number, weightKg: number) => void;
+}) {
+  const template = templateById(templates, templateId);
+  if (!template) return null;
 
   return (
-    <View style={[styles.pill, { backgroundColor: `${color}1A` }]}>
-      <ThemedText type="caption" style={{ color, fontWeight: '700' }}>
-        {label}
-      </ThemedText>
+    <View>
+      <SectionHeader title={template.title} />
+      <View style={{ gap: Spacing.three }}>
+        {template.exercises.map((exercise) => (
+          <ExerciseLogRow
+            key={exercise.id}
+            exercise={exercise}
+            setsToday={setsForExerciseOnDate(logs, exercise.id, date)}
+            history={exerciseTopSetHistory(logs, exercise.id)}
+            onAddSet={(reps, weightKg) => onAddSet(exercise.id, reps, weightKg)}
+          />
+        ))}
+      </View>
     </View>
+  );
+}
+
+function CardioDay({ label, sport, durationMin }: { label: string; sport: Sport; durationMin: number }) {
+  const theme = useTheme();
+  return (
+    <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
+      <View style={[styles.dayIcon, { backgroundColor: theme.accentSoft }]}>
+        <Icon name={sportIcon[sport]} size={26} color={theme.accent} />
+      </View>
+      <ThemedText type="subtitle">{label}</ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary">
+        {sportMeta[sport].label} · {durationMin} min
+      </ThemedText>
+    </GlassSurface>
+  );
+}
+
+function RestDay() {
+  const theme = useTheme();
+  return (
+    <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
+      <View style={[styles.dayIcon, { backgroundColor: theme.backgroundElement }]}>
+        <Icon name="moon" size={26} color={theme.textSecondary} />
+      </View>
+      <ThemedText type="subtitle">Giorno di riposo</ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+        Il recupero fa parte del piano: dormi bene e resta idratato.
+      </ThemedText>
+    </GlassSurface>
   );
 }
 
@@ -98,22 +141,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
   },
-  workoutRow: {
-    flexDirection: 'row',
+  dayCard: {
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
+    gap: Spacing.two,
+    padding: Spacing.five,
   },
-  sportBadge: {
-    width: 40,
-    height: 40,
+  dayIcon: {
+    width: 56,
+    height: 56,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pill: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
   },
 });
