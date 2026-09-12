@@ -1,9 +1,21 @@
 export type Sport = 'gym' | 'functional' | 'running' | 'swimming' | 'tennis' | 'cycling' | 'other';
 
-export type Goal = 'muscle' | 'lean' | 'performance' | 'endurance' | 'health';
+export type Goal =
+  | 'loseFat'
+  | 'gainMuscle'
+  | 'recomposition'
+  | 'maintainImprove'
+  | 'gainStrength'
+  | 'improveEndurance'
+  | 'sportEvent'
+  | 'generalHealth';
+
+export type Sex = 'male' | 'female' | 'unspecified';
 
 export type UserProfile = {
   name: string;
+  sex: Sex;
+  ageRange: string;
   goal: Goal;
   sports: Sport[];
   heightCm: number;

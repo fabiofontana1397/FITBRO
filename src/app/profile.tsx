@@ -11,14 +11,18 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { sportIcon, sportMeta } from '@/lib/mock';
 import { useAppStore, type AppearanceMode } from '@/store/app-store';
+import { useAuthStore } from '@/store/auth-store';
 import { useUserStore } from '@/store/user-store';
 
 const GOAL_LABEL: Record<string, string> = {
-  muscle: 'Massa muscolare',
-  lean: 'Definizione',
-  performance: 'Performance',
-  endurance: 'Endurance',
-  health: 'Salute generale',
+  loseFat: 'Perdere grasso',
+  gainMuscle: 'Aumentare massa muscolare',
+  recomposition: 'Ricomposizione corporea',
+  maintainImprove: 'Mantenimento e forma fisica',
+  gainStrength: 'Aumentare forza',
+  improveEndurance: 'Migliorare resistenza',
+  sportEvent: 'Sport/evento',
+  generalHealth: 'Salute generale',
 };
 
 const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
@@ -33,10 +37,16 @@ export default function ProfileScreen() {
   const appearance = useAppStore((s) => s.appearance);
   const setAppearance = useAppStore((s) => s.setAppearance);
   const setHasOnboarded = useAppStore((s) => s.setHasOnboarded);
+  const logout = useAuthStore((s) => s.logout);
 
   const restartOnboarding = () => {
     setHasOnboarded(false);
     router.replace('/onboarding');
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.replace('/welcome');
   };
 
   return (
@@ -117,7 +127,13 @@ export default function ProfileScreen() {
 
       <Pressable onPress={restartOnboarding} hitSlop={8}>
         <ThemedText type="caption" style={{ textAlign: 'center', color: theme.accent }}>
-          Rivedi il primo accesso
+          Rifai il questionario
+        </ThemedText>
+      </Pressable>
+
+      <Pressable onPress={handleLogout} hitSlop={8}>
+        <ThemedText type="caption" style={{ textAlign: 'center', color: theme.danger }}>
+          Esci
         </ThemedText>
       </Pressable>
 

@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { Goal, Sport, UserProfile } from '@/lib/mock/types';
+import type { Goal, Sex, Sport, UserProfile } from '@/lib/mock/types';
 import { appJsonStorage } from '@/store/storage';
 
 const DEFAULT_PROFILE: UserProfile = {
   name: 'Fabio',
-  goal: 'performance',
+  sex: 'unspecified',
+  ageRange: '25-34',
+  goal: 'generalHealth',
   sports: ['gym', 'running', 'tennis', 'cycling'],
   heightCm: 180,
   targetWeightKg: 78,
@@ -15,17 +17,29 @@ const DEFAULT_PROFILE: UserProfile = {
   hydrationTargetMl: 2800,
 };
 
+export type FinalizeOnboardingInput = {
+  goal: Goal;
+  sports: Sport[];
+  sex: Sex;
+  ageRange: string;
+  heightCm: number;
+  targetWeightKg: number;
+  dailyCalorieTarget: number;
+  macroTargetsG: { protein: number; carbs: number; fats: number };
+  hydrationTargetMl: number;
+};
+
 type UserState = UserProfile & {
-  setGoalAndSports: (goal: Goal, sports: Sport[]) => void;
-  setStartingStats: (heightCm: number, targetWeightKg: number) => void;
+  finalizeOnboarding: (input: FinalizeOnboardingInput) => void;
+  updateProfile: (partial: Partial<UserProfile>) => void;
 };
 
 export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
       ...DEFAULT_PROFILE,
-      setGoalAndSports: (goal, sports) => set({ goal, sports }),
-      setStartingStats: (heightCm, targetWeightKg) => set({ heightCm, targetWeightKg }),
+      finalizeOnboarding: (input) => set(input),
+      updateProfile: (partial) => set(partial),
     }),
     { name: 'fitbro/user', storage: appJsonStorage }
   )
