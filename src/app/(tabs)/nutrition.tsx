@@ -65,42 +65,44 @@ export default function NutritionScreen() {
     <ScreenScroll>
       <ScreenHeader eyebrow="Bilancio energetico" title="Nutrizione" />
 
-      <View style={{ gap: Spacing.three }}>
-        <DayNavigator
-          date={selectedDate}
-          onPrev={() => setSelectedDate((d) => addDaysISO(d, -1))}
-          onNext={() => setSelectedDate((d) => addDaysISO(d, 1))}
-        />
-        <NutritionWeekStrip dates={weekDates} loggedDates={loggedDates} selectedDate={selectedDate} onSelect={setSelectedDate} />
-        <LoggingStreakBanner streak={streakInfo.streak} gapDays={streakInfo.gapDays} />
-      </View>
-
       <Animated.View style={heroAnimatedStyle}>
-        <GlassSurface level="card" radius={Radius.large} style={styles.heroCard}>
-          <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-            <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              / {currentUser.dailyCalorieTarget} kcal
-            </ThemedText>
-          </ProgressRing>
-          <View style={styles.macroRingsRow}>
-            {macroRings.map((macro) => {
-              const value = totals[macro.key];
-              const progress = Math.min(value / macro.target, 1);
-              return (
-                <View key={macro.key} style={styles.macroRingCol}>
-                  <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
-                    <Icon name={macro.icon} size={16} color={macro.color} />
-                  </ProgressRing>
-                  <ThemedText type="caption" style={{ marginTop: 4 }}>
-                    {Math.round(value)}/{macro.target}g
-                  </ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {macro.label}
-                  </ThemedText>
-                </View>
-              );
-            })}
+        <GlassSurface level="raised" radius={Radius.xlarge} style={styles.overviewCard}>
+          <DayNavigator
+            date={selectedDate}
+            onPrev={() => setSelectedDate((d) => addDaysISO(d, -1))}
+            onNext={() => setSelectedDate((d) => addDaysISO(d, 1))}
+          />
+          <NutritionWeekStrip dates={weekDates} loggedDates={loggedDates} selectedDate={selectedDate} onSelect={setSelectedDate} />
+          <LoggingStreakBanner streak={streakInfo.streak} gapDays={streakInfo.gapDays} />
+
+          <View style={styles.heroDivider} />
+
+          <View style={styles.heroRingsBlock}>
+            <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
+              <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                / {currentUser.dailyCalorieTarget} kcal
+              </ThemedText>
+            </ProgressRing>
+            <View style={styles.macroRingsRow}>
+              {macroRings.map((macro) => {
+                const value = totals[macro.key];
+                const progress = Math.min(value / macro.target, 1);
+                return (
+                  <View key={macro.key} style={styles.macroRingCol}>
+                    <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
+                      <Icon name={macro.icon} size={16} color={macro.color} />
+                    </ProgressRing>
+                    <ThemedText type="caption" style={{ marginTop: 4 }}>
+                      {Math.round(value)}/{macro.target}g
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {macro.label}
+                    </ThemedText>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         </GlassSurface>
       </Animated.View>
@@ -196,8 +198,15 @@ function MacroStat({ label, value, suffix = 'g' }: { label: string; value: numbe
 }
 
 const styles = StyleSheet.create({
-  heroCard: {
+  overviewCard: {
     padding: Spacing.four,
+    gap: Spacing.four,
+  },
+  heroDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(128,128,128,0.25)',
+  },
+  heroRingsBlock: {
     alignItems: 'center',
     gap: Spacing.four,
   },

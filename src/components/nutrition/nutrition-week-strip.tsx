@@ -53,9 +53,9 @@ export function NutritionWeekStrip({ dates, loggedDates, selectedDate, onSelect 
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   cell: {
+    flex: 1,
     alignItems: 'center',
     gap: 6,
   },
@@ -63,8 +63,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   circle: {
-    width: 32,
-    height: 32,
+    width: '68%',
+    aspectRatio: 1,
+    maxWidth: 40,
+    minWidth: 26,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

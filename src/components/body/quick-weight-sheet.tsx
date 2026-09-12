@@ -49,7 +49,7 @@ export function QuickWeightSheet({ visible, currentWeightKg, onClose, onSave }: 
               onChangeText={setValue}
               keyboardType="decimal-pad"
               autoFocus
-              style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: 'transparent' }]}
             />
             <ThemedText type="title" themeColor="textSecondary">
               kg

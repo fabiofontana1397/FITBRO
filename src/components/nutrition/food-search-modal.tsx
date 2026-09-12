@@ -76,7 +76,7 @@ export function FoodSearchModal({ visible, slot, date, onClose }: FoodSearchModa
               }}
               placeholder="Cerca un alimento…"
               placeholderTextColor={theme.textTertiary}
-              style={[styles.searchInput, { color: theme.text }]}
+              style={[styles.searchInput, { color: theme.text, backgroundColor: 'transparent' }]}
             />
           </View>
 
@@ -94,7 +94,7 @@ export function FoodSearchModal({ visible, slot, date, onClose }: FoodSearchModa
                   value={grams}
                   onChangeText={setGrams}
                   keyboardType="decimal-pad"
-                  style={[styles.gramsInput, { color: theme.text, borderColor: theme.border }]}
+                  style={[styles.gramsInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
                 />
                 <ThemedText type="caption" themeColor="textSecondary">
                   g

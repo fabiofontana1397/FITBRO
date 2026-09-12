@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Radius } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -8,10 +8,17 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export type GlassLevel = 'subtle' | 'card' | 'raised' | 'overlay';
 
 const LEVEL_INTENSITY: Record<GlassLevel, number> = {
-  subtle: 22,
-  card: 38,
-  raised: 55,
-  overlay: 78,
+  subtle: 26,
+  card: 42,
+  raised: 60,
+  overlay: 82,
+};
+
+const LEVEL_SHADOW: Record<GlassLevel, { opacity: number; radius: number; offsetY: number }> = {
+  subtle: { opacity: 0.08, radius: 10, offsetY: 3 },
+  card: { opacity: 0.16, radius: 18, offsetY: 7 },
+  raised: { opacity: 0.22, radius: 26, offsetY: 11 },
+  overlay: { opacity: 0.32, radius: 36, offsetY: 16 },
 };
 
 export type GlassSurfaceProps = {
@@ -38,12 +45,27 @@ export function GlassSurface({
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
 
+  // A brighter specular band along the top edge fading into a soft wash,
+  // the way light catches the top of a curved glass surface.
   const gradientColors = isDark
-    ? (['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.02)'] as const)
-    : (['rgba(255,255,255,0.65)', 'rgba(255,255,255,0.20)'] as const);
+    ? (['rgba(255,255,255,0.24)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.02)'] as const)
+    : (['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0.18)'] as const);
+  const gradientLocations = [0, 0.18, 1] as const;
+
+  const shadow = LEVEL_SHADOW[level];
 
   return (
-    <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
+    <View
+      style={[
+        { borderRadius: radius, overflow: 'hidden' },
+        Platform.select({
+          // On web box-shadow isn't clipped by this same element's overflow,
+          // so the shadow, blur-clip and border-radius can all live on one node.
+          web: { boxShadow: `0px ${shadow.offsetY}px ${shadow.radius}px rgba(0,0,0,${shadow.opacity})` },
+          default: null,
+        }),
+        style,
+      ]}>
       <BlurView
         intensity={LEVEL_INTENSITY[level]}
         tint={isDark ? 'dark' : 'light'}
@@ -52,8 +74,9 @@ export function GlassSurface({
       />
       <LinearGradient
         colors={gradientColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.3, y: 1 }}
+        locations={gradientLocations}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.4, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <View
@@ -62,7 +85,8 @@ export function GlassSurface({
           bordered && {
             borderRadius: radius,
             borderWidth: StyleSheet.hairlineWidth * 1.5,
-            borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(14,14,17,0.10)',
+            borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(14,14,17,0.10)',
+            borderTopColor: isDark ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.9)',
           },
         ]}>
         {children}
