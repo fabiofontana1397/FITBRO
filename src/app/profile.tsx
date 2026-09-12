@@ -9,8 +9,9 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { currentUser, sportIcon, sportMeta } from '@/lib/mock';
+import { sportIcon, sportMeta } from '@/lib/mock';
 import { useAppStore, type AppearanceMode } from '@/store/app-store';
+import { useUserStore } from '@/store/user-store';
 
 const GOAL_LABEL: Record<string, string> = {
   muscle: 'Massa muscolare',
@@ -28,8 +29,15 @@ const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const currentUser = useUserStore();
   const appearance = useAppStore((s) => s.appearance);
   const setAppearance = useAppStore((s) => s.setAppearance);
+  const setHasOnboarded = useAppStore((s) => s.setHasOnboarded);
+
+  const restartOnboarding = () => {
+    setHasOnboarded(false);
+    router.replace('/onboarding');
+  };
 
   return (
     <ScreenScroll>
@@ -76,6 +84,14 @@ export default function ProfileScreen() {
       </View>
 
       <View>
+        <SectionHeader title="Dati di partenza" />
+        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three, gap: Spacing.two }}>
+          <Row label="Altezza" value={`${currentUser.heightCm} cm`} />
+          <Row label="Peso obiettivo" value={`${currentUser.targetWeightKg} kg`} />
+        </GlassSurface>
+      </View>
+
+      <View>
         <SectionHeader title="Obiettivi nutrizionali" />
         <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three, gap: Spacing.two }}>
           <Row label="Calorie giornaliere" value={`${currentUser.dailyCalorieTarget} kcal`} />
@@ -98,6 +114,12 @@ export default function ProfileScreen() {
           </ThemedText>
         </GlassSurface>
       </View>
+
+      <Pressable onPress={restartOnboarding} hitSlop={8}>
+        <ThemedText type="caption" style={{ textAlign: 'center', color: theme.accent }}>
+          Rivedi il primo accesso
+        </ThemedText>
+      </Pressable>
 
       <ThemedText type="caption" themeColor="textTertiary" style={{ textAlign: 'center' }}>
         FITBRO · v0.1.0 prototype

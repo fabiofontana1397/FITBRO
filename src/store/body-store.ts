@@ -16,6 +16,7 @@ type BodyState = {
   entries: BodyMetricSnapshot[];
   photos: BodyPhoto[];
   addWeightEntry: (weightKg: number, date?: string) => void;
+  resetStartingWeight: (weightKg: number, date?: string) => void;
   addMeasurement: (partial: Partial<Omit<BodyMetricSnapshot, 'date'>>, date?: string) => void;
   addPhoto: (uri: string, date?: string) => void;
   removePhoto: (id: string) => void;
@@ -37,6 +38,14 @@ export const useBodyStore = create<BodyState>()(
             return { entries };
           }
           return { entries: [...state.entries, nextEntry] };
+        }),
+      // Called from onboarding: a real first-time user has no history yet, so this
+      // replaces the seeded demo history with a single fresh entry instead of
+      // grafting a user-entered weight onto an unrelated canned trend.
+      resetStartingWeight: (weightKg, date = daysAgoISO(0)) =>
+        set((state) => {
+          const template = state.entries[state.entries.length - 1];
+          return { entries: [{ ...template, date, weightKg }] };
         }),
       addMeasurement: (partial, date = daysAgoISO(0)) =>
         set((state) => {

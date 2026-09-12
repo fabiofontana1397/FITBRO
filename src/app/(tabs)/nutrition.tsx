@@ -18,7 +18,6 @@ import { TimingSlow } from '@/constants/motion';
 import { useTheme } from '@/hooks/use-theme';
 import { addDaysISO, currentWeekDates, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
-import { currentUser } from '@/lib/mock/user';
 import {
   entriesForSlot,
   loggingStreakInfo,
@@ -29,9 +28,11 @@ import {
   useNutritionStore,
   type MealSlot,
 } from '@/store/nutrition-store';
+import { useUserStore } from '@/store/user-store';
 
 export default function NutritionScreen() {
   const theme = useTheme();
+  const currentUser = useUserStore();
   const entries = useNutritionStore((s) => s.entries);
   const removeEntry = useNutritionStore((s) => s.removeEntry);
   const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
@@ -113,7 +114,7 @@ export default function NutritionScreen() {
           {MEAL_SLOTS.map((meta) => {
             const slotEntries = entriesForSlot(entries, meta.id, selectedDate);
             const slotTotals = sumMacros(slotEntries);
-            const target = targetsForSlot(meta.id);
+            const target = targetsForSlot(meta.id, currentUser);
             const progress = target.kcal ? Math.min(slotTotals.kcal / target.kcal, 1) : 0;
             const gdaPct = currentUser.dailyCalorieTarget ? Math.round((slotTotals.kcal / currentUser.dailyCalorieTarget) * 100) : 0;
 

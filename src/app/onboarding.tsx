@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { ScreenScroll } from '@/components/screen-scroll';
@@ -10,8 +10,11 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { sportIcon, sportMeta } from '@/lib/mock';
+import { daysAgoISO } from '@/lib/mock/dates';
 import type { Goal, Sport } from '@/lib/mock/types';
 import { useAppStore } from '@/store/app-store';
+import { useBodyStore } from '@/store/body-store';
+import { useUserStore } from '@/store/user-store';
 
 const GOALS: { value: Goal; label: string; description: string; icon: IconName }[] = [
   { value: 'muscle', label: 'Massa muscolare', description: 'Costruisci forza e volume', icon: 'gym' },
@@ -23,24 +26,39 @@ const GOALS: { value: Goal; label: string; description: string; icon: IconName }
 
 const SPORTS: Sport[] = ['gym', 'functional', 'running', 'swimming', 'tennis', 'cycling', 'other'];
 
+const STEP_COUNT = 4;
+
 export default function OnboardingScreen() {
   const theme = useTheme();
   const completeOnboarding = useAppStore((s) => s.completeOnboarding);
+  const setGoalAndSports = useUserStore((s) => s.setGoalAndSports);
+  const setStartingStats = useUserStore((s) => s.setStartingStats);
+  const resetStartingWeight = useBodyStore((s) => s.resetStartingWeight);
+
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [sports, setSports] = useState<Sport[]>(['gym', 'running']);
+  const [heightCm, setHeightCm] = useState('180');
+  const [currentWeightKg, setCurrentWeightKg] = useState('80');
+  const [targetWeightKg, setTargetWeightKg] = useState('75');
 
   const toggleSport = (sport: Sport) =>
     setSports((prev) => (prev.includes(sport) ? prev.filter((s) => s !== sport) : [...prev, sport]));
 
-  const canContinue = step === 0 ? goal != null : step === 1 ? sports.length > 0 : true;
+  const statsValid =
+    Number(heightCm) > 0 && Number(currentWeightKg) > 0 && Number(targetWeightKg) > 0;
+
+  const canContinue = step === 0 ? goal != null : step === 1 ? sports.length > 0 : step === 2 ? statsValid : true;
 
   const onPrimaryPress = () => {
-    if (step < 2) {
+    if (step < STEP_COUNT - 1) {
       setStep(step + 1);
       return;
     }
-    completeOnboarding(goal ?? 'health', sports);
+    setGoalAndSports(goal ?? 'health', sports);
+    setStartingStats(Number(heightCm), Number(targetWeightKg));
+    resetStartingWeight(Number(currentWeightKg), daysAgoISO(0));
+    completeOnboarding();
     router.replace('/');
   };
 
@@ -56,7 +74,7 @@ export default function OnboardingScreen() {
             <View style={{ width: 22 }} />
           )}
           <View style={styles.dots}>
-            {[0, 1, 2].map((i) => (
+            {Array.from({ length: STEP_COUNT }, (_, i) => (
               <View
                 key={i}
                 style={[
@@ -85,7 +103,7 @@ export default function OnboardingScreen() {
                     <GlassSurface
                       level={selected ? 'raised' : 'card'}
                       radius={Radius.large}
-                      style={[styles.optionRow, selected && { borderColor: theme.accent } as any]}>
+                      style={[styles.optionRow, selected && ({ borderColor: theme.accent } as any)]}>
                       <View style={styles.optionInner}>
                         <View style={[styles.optionIcon, { backgroundColor: theme.accentSoft }]}>
                           <Icon name={option.icon} size={20} color={theme.accent} />
@@ -122,7 +140,7 @@ export default function OnboardingScreen() {
                     <GlassSurface
                       level={selected ? 'raised' : 'card'}
                       radius={Radius.large}
-                      style={[styles.sportCard, selected && { borderColor: theme.accent } as any]}>
+                      style={[styles.sportCard, selected && ({ borderColor: theme.accent } as any)]}>
                       <View style={styles.sportCardInner}>
                         <Icon name={sportIcon[sport]} size={26} color={selected ? theme.accent : theme.textSecondary} />
                         <ThemedText type="caption" style={{ textAlign: 'center' }}>
@@ -140,6 +158,40 @@ export default function OnboardingScreen() {
         {step === 2 && (
           <View style={{ gap: Spacing.four }}>
             <View style={{ gap: Spacing.one }}>
+              <ThemedText type="display">Da dove parti?</ThemedText>
+              <ThemedText type="default" themeColor="textSecondary">
+                Usiamo questi dati per calcolare i tuoi progressi verso l’obiettivo.
+              </ThemedText>
+            </View>
+            <View style={{ gap: Spacing.three }}>
+              <StatInput
+                label="Altezza"
+                unit="cm"
+                value={heightCm}
+                onChangeText={setHeightCm}
+                theme={theme}
+              />
+              <StatInput
+                label="Peso attuale"
+                unit="kg"
+                value={currentWeightKg}
+                onChangeText={setCurrentWeightKg}
+                theme={theme}
+              />
+              <StatInput
+                label="Peso obiettivo"
+                unit="kg"
+                value={targetWeightKg}
+                onChangeText={setTargetWeightKg}
+                theme={theme}
+              />
+            </View>
+          </View>
+        )}
+
+        {step === 3 && (
+          <View style={{ gap: Spacing.four }}>
+            <View style={{ gap: Spacing.one }}>
               <ThemedText type="display">Tutto pronto</ThemedText>
               <ThemedText type="default" themeColor="textSecondary">
                 Ecco il tuo profilo iniziale. Potrai modificarlo in qualsiasi momento.
@@ -148,18 +200,53 @@ export default function OnboardingScreen() {
             <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three, gap: Spacing.three }}>
               <SummaryRow label="Obiettivo" value={GOALS.find((g) => g.value === goal)?.label ?? '—'} />
               <SummaryRow label="Sport" value={sports.map((s) => sportMeta[s].label).join(', ')} />
+              <SummaryRow label="Altezza" value={`${heightCm} cm`} />
+              <SummaryRow label="Peso attuale → obiettivo" value={`${currentWeightKg} kg → ${targetWeightKg} kg`} />
             </GlassSurface>
           </View>
         )}
       </View>
 
       <PrimaryButton
-        label={step < 2 ? 'Continua' : 'Inizia il tuo percorso'}
+        label={step < STEP_COUNT - 1 ? 'Continua' : 'Inizia il tuo percorso'}
         onPress={onPrimaryPress}
         disabled={!canContinue}
         style={{ marginTop: Spacing.five }}
       />
     </ScreenScroll>
+  );
+}
+
+function StatInput({
+  label,
+  unit,
+  value,
+  onChangeText,
+  theme,
+}: {
+  label: string;
+  unit: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <GlassSurface level="card" radius={Radius.large}>
+      <View style={styles.statInputRow}>
+        <ThemedText type="small" style={{ flex: 1 }}>
+          {label}
+        </ThemedText>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType="decimal-pad"
+          style={[styles.statInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+        <ThemedText type="caption" themeColor="textSecondary">
+          {unit}
+        </ThemedText>
+      </View>
+    </GlassSurface>
   );
 }
 
@@ -221,5 +308,19 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  statInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.three,
+  },
+  statInput: {
+    width: 72,
+    borderRadius: Radius.small,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 8,
+    fontSize: 15,
+    textAlign: 'right',
   },
 });

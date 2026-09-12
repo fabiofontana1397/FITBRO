@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 import type { IconName } from '@/components/ui/icon';
 import { addDaysISO, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
-import { currentUser } from '@/lib/mock/user';
+import type { UserProfile } from '@/lib/mock/types';
 import { appJsonStorage } from '@/store/storage';
 
 export type MealSlot =
@@ -105,13 +105,13 @@ export function entriesForSlot(entries: MealFoodEntry[], slot: MealSlot, date: s
   return entries.filter((e) => e.slot === slot && e.date === date);
 }
 
-export function targetsForSlot(slot: MealSlot): Macros {
+export function targetsForSlot(slot: MealSlot, profile: Pick<UserProfile, 'dailyCalorieTarget' | 'macroTargetsG'>): Macros {
   const meta = MEAL_SLOTS.find((s) => s.id === slot)!;
   return {
-    kcal: currentUser.dailyCalorieTarget * meta.sharePct,
-    protein: currentUser.macroTargetsG.protein * meta.sharePct,
-    carbs: currentUser.macroTargetsG.carbs * meta.sharePct,
-    fats: currentUser.macroTargetsG.fats * meta.sharePct,
+    kcal: profile.dailyCalorieTarget * meta.sharePct,
+    protein: profile.macroTargetsG.protein * meta.sharePct,
+    carbs: profile.macroTargetsG.carbs * meta.sharePct,
+    fats: profile.macroTargetsG.fats * meta.sharePct,
   };
 }
 

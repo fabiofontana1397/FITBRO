@@ -1,9 +1,9 @@
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { daysAgoISO } from '@/lib/mock/dates';
-import { currentUser } from '@/lib/mock/user';
 import { useBodyStore } from '@/store/body-store';
 import { useNutritionStore, sumMacros } from '@/store/nutrition-store';
 import { useTrainingStore } from '@/store/training-store';
+import { useUserStore } from '@/store/user-store';
 
 function matches(text: string, ...keywords: string[]) {
   const lower = text.toLowerCase();
@@ -12,6 +12,7 @@ function matches(text: string, ...keywords: string[]) {
 
 function weightReply(): string {
   const { entries } = useBodyStore.getState();
+  const currentUser = useUserStore.getState();
   const latest = entries[entries.length - 1];
   const prev = entries[entries.length - 2];
   const delta = prev ? latest.weightKg - prev.weightKg : 0;
@@ -23,6 +24,7 @@ function weightReply(): string {
 function nutritionReply(): string {
   const today = daysAgoISO(0);
   const { entries } = useNutritionStore.getState();
+  const currentUser = useUserStore.getState();
   const todaysEntries = entries.filter((e) => e.date === today);
   const totals = sumMacros(todaysEntries);
   const remainingKcal = Math.max(currentUser.dailyCalorieTarget - totals.kcal, 0);
@@ -68,6 +70,7 @@ function stepsReply(): string {
 
 function goalReply(): string {
   const { entries } = useBodyStore.getState();
+  const currentUser = useUserStore.getState();
   const latest = entries[entries.length - 1];
   const start = entries[0];
   const totalToLose = start.weightKg - currentUser.targetWeightKg;
@@ -81,7 +84,7 @@ const FALLBACK =
 
 export function generateAssistantReply(message: string): string {
   if (matches(message, 'ciao', 'salve', 'hey', 'buongiorno', 'buonasera')) {
-    return `Ciao ${currentUser.name}! Sono il tuo coach FITBRO. Come posso aiutarti oggi — allenamento, dieta o obiettivi?`;
+    return `Ciao ${useUserStore.getState().name}! Sono il tuo coach FITBRO. Come posso aiutarti oggi — allenamento, dieta o obiettivi?`;
   }
   if (matches(message, 'obiettivo', 'goal', 'target', 'quanto manca')) return goalReply();
   if (matches(message, 'peso', 'pesare', 'bilancia')) return weightReply();

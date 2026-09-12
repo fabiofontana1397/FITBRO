@@ -18,7 +18,6 @@ import { latestSnapshot } from '@/lib/mock/body';
 import { daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { correlationNote, insights } from '@/lib/mock/progress';
 import { sportIcon, sportMeta } from '@/lib/mock/training';
-import { currentUser } from '@/lib/mock/user';
 import { useBodyStore } from '@/store/body-store';
 import { sumMacros, useNutritionStore } from '@/store/nutrition-store';
 import {
@@ -28,6 +27,7 @@ import {
   templateById,
   useTrainingStore,
 } from '@/store/training-store';
+import { useUserStore } from '@/store/user-store';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -38,6 +38,7 @@ function greeting() {
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const currentUser = useUserStore();
   const today = daysAgoISO(0);
   const { plan, templates, logs } = useTrainingStore();
   const nutritionEntries = useNutritionStore((s) => s.entries);

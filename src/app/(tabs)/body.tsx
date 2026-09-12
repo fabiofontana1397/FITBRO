@@ -17,9 +17,9 @@ import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { deltaFromPrevious, latestSnapshot, percentChange, seriesOf } from '@/lib/mock/body';
-import { currentUser } from '@/lib/mock/user';
 import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
 import { useBodyStore } from '@/store/body-store';
+import { useUserStore } from '@/store/user-store';
 
 const MEASUREMENTS: { zone: MeasurementZone; label: string }[] = [
   { zone: 'waistCm', label: 'Vita' },
@@ -29,6 +29,7 @@ const MEASUREMENTS: { zone: MeasurementZone; label: string }[] = [
 
 export default function BodyScreen() {
   const theme = useTheme();
+  const currentUser = useUserStore();
   const entries = useBodyStore((s) => s.entries);
   const photos = useBodyStore((s) => s.photos);
   const addWeightEntry = useBodyStore((s) => s.addWeightEntry);
