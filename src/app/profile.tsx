@@ -1,0 +1,171 @@
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+import { GlassSurface } from '@/components/glass/glass-surface';
+import { ScreenScroll } from '@/components/screen-scroll';
+import { ThemedText } from '@/components/themed-text';
+import { Icon, type IconName } from '@/components/ui/icon';
+import { SectionHeader } from '@/components/ui/section-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { currentUser, sportIcon, sportMeta } from '@/lib/mock';
+import { useAppStore, type AppearanceMode } from '@/store/app-store';
+
+const GOAL_LABEL: Record<string, string> = {
+  muscle: 'Massa muscolare',
+  lean: 'Definizione',
+  performance: 'Performance',
+  endurance: 'Endurance',
+  health: 'Salute generale',
+};
+
+const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
+  { value: 'system', label: 'Sistema' },
+  { value: 'light', label: 'Chiaro' },
+  { value: 'dark', label: 'Scuro' },
+];
+
+export default function ProfileScreen() {
+  const theme = useTheme();
+  const appearance = useAppStore((s) => s.appearance);
+  const setAppearance = useAppStore((s) => s.setAppearance);
+
+  return (
+    <ScreenScroll>
+      <View style={styles.header}>
+        <ThemedText type="title">Profilo</ThemedText>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <GlassSurface level="card" radius={Radius.pill} style={styles.closeButton}>
+            <View style={styles.closeInner}>
+              <Icon name="close" size={18} color={theme.text} />
+            </View>
+          </GlassSurface>
+        </Pressable>
+      </View>
+
+      <GlassSurface level="card" radius={Radius.large} style={styles.identityCard}>
+        <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
+          <ThemedText type="title" style={{ color: theme.accent }}>
+            {currentUser.name.charAt(0)}
+          </ThemedText>
+        </View>
+        <View>
+          <ThemedText type="subtitle">{currentUser.name}</ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Obiettivo: {GOAL_LABEL[currentUser.goal]}
+          </ThemedText>
+        </View>
+      </GlassSurface>
+
+      <View>
+        <SectionHeader title="Aspetto" />
+        <SegmentedControl options={APPEARANCE_OPTIONS} value={appearance} onChange={setAppearance} />
+      </View>
+
+      <View>
+        <SectionHeader title="Sport praticati" action="Modifica" onActionPress={() => router.push('/onboarding')} />
+        <View style={styles.sportsGrid}>
+          {currentUser.sports.map((sport) => (
+            <View key={sport} style={[styles.sportChip, { backgroundColor: theme.backgroundElement }]}>
+              <Icon name={sportIcon[sport] as IconName} size={16} color={theme.accent} />
+              <ThemedText type="caption">{sportMeta[sport].label}</ThemedText>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View>
+        <SectionHeader title="Obiettivi nutrizionali" />
+        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three, gap: Spacing.two }}>
+          <Row label="Calorie giornaliere" value={`${currentUser.dailyCalorieTarget} kcal`} />
+          <Row label="Proteine" value={`${currentUser.macroTargetsG.protein} g`} />
+          <Row label="Carboidrati" value={`${currentUser.macroTargetsG.carbs} g`} />
+          <Row label="Grassi" value={`${currentUser.macroTargetsG.fats} g`} />
+          <Row label="Idratazione" value={`${(currentUser.hydrationTargetMl / 1000).toFixed(1)} L`} />
+        </GlassSurface>
+      </View>
+
+      <View>
+        <SectionHeader title="Integrazioni" />
+        <GlassSurface level="card" radius={Radius.large} style={styles.integrationRow}>
+          <Icon name="bolt" size={18} color={theme.textTertiary} />
+          <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+            Connetti Apple Health, Garmin o Whoop
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textTertiary">
+            Presto
+          </ThemedText>
+        </GlassSurface>
+      </View>
+
+      <ThemedText type="caption" themeColor="textTertiary" style={{ textAlign: 'center' }}>
+        FITBRO · v0.1.0 prototype
+      </ThemedText>
+    </ScreenScroll>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.settingRow}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold">{value}</ThemedText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+  },
+  closeInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sportsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  sportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  integrationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+  },
+});

@@ -1,26 +1,86 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * FITBRO design tokens.
+ *
+ * Palette: black / white / gray neutrals with a single high-energy orange
+ * accent reserved for CTAs, progress, active state and achievements.
+ * Both light and dark are first-class; dark is the "hero" mode.
  */
 
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
+const orange = {
+  50: '#FFF1EA',
+  100: '#FFDCC6',
+  300: '#FF9D66',
+  500: '#FF5A1F',
+  600: '#E84B12',
+  700: '#C23D0D',
+};
+
+const neutral = {
+  0: '#FFFFFF',
+  50: '#F7F7F8',
+  100: '#EEEEF0',
+  200: '#E2E2E6',
+  300: '#C7C8CD',
+  400: '#9A9BA3',
+  500: '#6E6F78',
+  600: '#4B4C54',
+  700: '#303138',
+  800: '#1C1D22',
+  850: '#151519',
+  900: '#0E0E11',
+  950: '#000000',
+};
+
+export const Palette = { orange, neutral };
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    background: neutral[50],
+    backgroundElevated: neutral[0],
+    backgroundElement: neutral[100],
+    backgroundSelected: neutral[200],
+    surfaceGlass: 'rgba(255,255,255,0.55)',
+    surfaceGlassStrong: 'rgba(255,255,255,0.75)',
+    border: 'rgba(14,14,17,0.08)',
+    borderStrong: 'rgba(14,14,17,0.14)',
+    text: neutral[950],
+    textSecondary: neutral[600],
+    textTertiary: neutral[400],
+    accent: orange[500],
+    accentPressed: orange[600],
+    accentSoft: orange[50],
+    onAccent: neutral[0],
+    success: '#1F9254',
+    warning: '#B8860B',
+    danger: '#D6402C',
+    tabBarBlur: 'light' as const,
+    shadow: 'rgba(20,20,25,0.12)',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    background: neutral[950],
+    backgroundElevated: neutral[900],
+    backgroundElement: neutral[850],
+    backgroundSelected: neutral[800],
+    surfaceGlass: 'rgba(28,29,34,0.55)',
+    surfaceGlassStrong: 'rgba(28,29,34,0.78)',
+    border: 'rgba(255,255,255,0.08)',
+    borderStrong: 'rgba(255,255,255,0.16)',
+    text: neutral[0],
+    textSecondary: neutral[300],
+    textTertiary: neutral[500],
+    accent: orange[500],
+    accentPressed: orange[300],
+    accentSoft: 'rgba(255,90,31,0.16)',
+    onAccent: neutral[0],
+    success: '#3DD07A',
+    warning: '#E0B23D',
+    danger: '#FF6B57',
+    tabBarBlur: 'dark' as const,
+    shadow: 'rgba(0,0,0,0.5)',
   },
 } as const;
 
@@ -28,13 +88,9 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -61,5 +117,13 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const Radius = {
+  small: 12,
+  medium: 18,
+  large: 24,
+  xlarge: 32,
+  pill: 999,
+} as const;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 900;
