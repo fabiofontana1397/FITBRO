@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { daysAgoISO } from '@/lib/mock/dates';
+import type { IconName } from '@/components/ui/icon';
+import { addDaysISO, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
 import { currentUser } from '@/lib/mock/user';
 import { appJsonStorage } from '@/store/storage';
@@ -14,13 +15,13 @@ export type MealSlot =
   | 'cena'
   | 'spuntinoSera';
 
-export const MEAL_SLOTS: { id: MealSlot; label: string; time: string; sharePct: number }[] = [
-  { id: 'colazione', label: 'Colazione', time: '07:30', sharePct: 0.22 },
-  { id: 'spuntinoMattina', label: 'Spuntino mattina', time: '10:30', sharePct: 0.08 },
-  { id: 'pranzo', label: 'Pranzo', time: '13:15', sharePct: 0.3 },
-  { id: 'spuntinoPomeriggio', label: 'Spuntino pomeriggio', time: '17:00', sharePct: 0.1 },
-  { id: 'cena', label: 'Cena', time: '20:00', sharePct: 0.25 },
-  { id: 'spuntinoSera', label: 'Spuntino sera', time: '22:00', sharePct: 0.05 },
+export const MEAL_SLOTS: { id: MealSlot; label: string; time: string; sharePct: number; icon: IconName }[] = [
+  { id: 'colazione', label: 'Colazione', time: '07:30', sharePct: 0.22, icon: 'mealSun' },
+  { id: 'spuntinoMattina', label: 'Spuntino mattina', time: '10:30', sharePct: 0.08, icon: 'mealSnack' },
+  { id: 'pranzo', label: 'Pranzo', time: '13:15', sharePct: 0.3, icon: 'mealMidday' },
+  { id: 'spuntinoPomeriggio', label: 'Spuntino pomeriggio', time: '17:00', sharePct: 0.1, icon: 'mealSnack' },
+  { id: 'cena', label: 'Cena', time: '20:00', sharePct: 0.25, icon: 'mealMoon' },
+  { id: 'spuntinoSera', label: 'Spuntino sera', time: '22:00', sharePct: 0.05, icon: 'mealSnack' },
 ];
 
 export type MealFoodEntry = {
@@ -112,4 +113,32 @@ export function targetsForSlot(slot: MealSlot): Macros {
     carbs: currentUser.macroTargetsG.carbs * meta.sharePct,
     fats: currentUser.macroTargetsG.fats * meta.sharePct,
   };
+}
+
+export function hasEntriesOnDate(entries: MealFoodEntry[], date: string): boolean {
+  return entries.some((e) => e.date === date);
+}
+
+export type LoggingStreakInfo = { streak: number; gapDays: number };
+
+/** Consecutive days (up to and including `referenceISO`) with at least one logged food.
+ * If today itself has nothing logged yet, reports how many days since the last logged day instead. */
+export function loggingStreakInfo(entries: MealFoodEntry[], referenceISO: string = daysAgoISO(0)): LoggingStreakInfo {
+  const loggedDates = new Set(entries.map((e) => e.date));
+
+  let streak = 0;
+  let cursor = referenceISO;
+  while (loggedDates.has(cursor)) {
+    streak++;
+    cursor = addDaysISO(cursor, -1);
+  }
+
+  if (streak > 0) return { streak, gapDays: 0 };
+
+  for (let i = 1; i <= 30; i++) {
+    if (loggedDates.has(addDaysISO(referenceISO, -i))) {
+      return { streak: 0, gapDays: i };
+    }
+  }
+  return { streak: 0, gapDays: 30 };
 }

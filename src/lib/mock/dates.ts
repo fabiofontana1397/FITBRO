@@ -50,3 +50,14 @@ export function weekdayShort(iso: string, locale = 'it-IT'): string {
 export function dayOfMonth(iso: string): number {
   return new Date(iso).getDate();
 }
+
+export function addDaysISO(iso: string, delta: number): string {
+  const d = new Date(iso);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+export function formatFullDay(iso: string, locale = 'it-IT'): string {
+  return new Date(iso).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+}

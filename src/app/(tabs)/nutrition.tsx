@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { DayNavigator } from '@/components/nutrition/day-navigator';
 import { FoodSearchModal } from '@/components/nutrition/food-search-modal';
+import { LoggingStreakBanner } from '@/components/nutrition/logging-streak-banner';
+import { NutritionWeekStrip } from '@/components/nutrition/nutrition-week-strip';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
@@ -10,12 +14,14 @@ import { Icon } from '@/components/ui/icon';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Radius, Spacing } from '@/constants/theme';
+import { TimingSlow } from '@/constants/motion';
 import { useTheme } from '@/hooks/use-theme';
-import { daysAgoISO } from '@/lib/mock/dates';
+import { addDaysISO, currentWeekDates, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
 import { currentUser } from '@/lib/mock/user';
 import {
   entriesForSlot,
+  loggingStreakInfo,
   macrosForEntry,
   MEAL_SLOTS,
   sumMacros,
@@ -26,14 +32,28 @@ import {
 
 export default function NutritionScreen() {
   const theme = useTheme();
-  const today = daysAgoISO(0);
   const entries = useNutritionStore((s) => s.entries);
   const removeEntry = useNutritionStore((s) => s.removeEntry);
   const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
+  const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
 
-  const todaysEntries = entries.filter((e) => e.date === today);
-  const totals = sumMacros(todaysEntries);
+  const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
+  const loggedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
+  const streakInfo = useMemo(() => loggingStreakInfo(entries), [entries]);
+
+  const dayEntries = entries.filter((e) => e.date === selectedDate);
+  const totals = sumMacros(dayEntries);
   const calorieProgress = totals.kcal / currentUser.dailyCalorieTarget;
+
+  const heroEntrance = useSharedValue(0);
+  useEffect(() => {
+    heroEntrance.value = 0;
+    heroEntrance.value = withTiming(1, TimingSlow);
+  }, [selectedDate, heroEntrance]);
+  const heroAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: heroEntrance.value,
+    transform: [{ translateY: (1 - heroEntrance.value) * 14 }, { scale: 0.97 + heroEntrance.value * 0.03 }],
+  }));
 
   const macroRings: { key: 'protein' | 'carbs' | 'fats'; label: string; icon: 'protein' | 'carbs' | 'fats'; color: string; target: number }[] = [
     { key: 'protein', label: 'Proteine', icon: 'protein', color: theme.accent, target: currentUser.macroTargetsG.protein },
@@ -45,46 +65,62 @@ export default function NutritionScreen() {
     <ScreenScroll>
       <ScreenHeader eyebrow="Bilancio energetico" title="Nutrizione" />
 
-      <GlassSurface level="card" radius={Radius.large} style={styles.heroCard}>
-        <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-          <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary">
-            / {currentUser.dailyCalorieTarget} kcal
-          </ThemedText>
-        </ProgressRing>
-        <View style={styles.macroRingsRow}>
-          {macroRings.map((macro) => {
-            const value = totals[macro.key];
-            const progress = Math.min(value / macro.target, 1);
-            return (
-              <View key={macro.key} style={styles.macroRingCol}>
-                <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
-                  <Icon name={macro.icon} size={16} color={macro.color} />
-                </ProgressRing>
-                <ThemedText type="caption" style={{ marginTop: 4 }}>
-                  {Math.round(value)}/{macro.target}g
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {macro.label}
-                </ThemedText>
-              </View>
-            );
-          })}
-        </View>
-      </GlassSurface>
+      <View style={{ gap: Spacing.three }}>
+        <DayNavigator
+          date={selectedDate}
+          onPrev={() => setSelectedDate((d) => addDaysISO(d, -1))}
+          onNext={() => setSelectedDate((d) => addDaysISO(d, 1))}
+        />
+        <NutritionWeekStrip dates={weekDates} loggedDates={loggedDates} selectedDate={selectedDate} onSelect={setSelectedDate} />
+        <LoggingStreakBanner streak={streakInfo.streak} gapDays={streakInfo.gapDays} />
+      </View>
+
+      <Animated.View style={heroAnimatedStyle}>
+        <GlassSurface level="card" radius={Radius.large} style={styles.heroCard}>
+          <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
+            <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              / {currentUser.dailyCalorieTarget} kcal
+            </ThemedText>
+          </ProgressRing>
+          <View style={styles.macroRingsRow}>
+            {macroRings.map((macro) => {
+              const value = totals[macro.key];
+              const progress = Math.min(value / macro.target, 1);
+              return (
+                <View key={macro.key} style={styles.macroRingCol}>
+                  <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
+                    <Icon name={macro.icon} size={16} color={macro.color} />
+                  </ProgressRing>
+                  <ThemedText type="caption" style={{ marginTop: 4 }}>
+                    {Math.round(value)}/{macro.target}g
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {macro.label}
+                  </ThemedText>
+                </View>
+              );
+            })}
+          </View>
+        </GlassSurface>
+      </Animated.View>
 
       <View>
         <SectionHeader title="I tuoi pasti" />
         <View style={{ gap: Spacing.three }}>
           {MEAL_SLOTS.map((meta) => {
-            const slotEntries = entriesForSlot(entries, meta.id, today);
+            const slotEntries = entriesForSlot(entries, meta.id, selectedDate);
             const slotTotals = sumMacros(slotEntries);
             const target = targetsForSlot(meta.id);
             const progress = target.kcal ? Math.min(slotTotals.kcal / target.kcal, 1) : 0;
+            const gdaPct = currentUser.dailyCalorieTarget ? Math.round((slotTotals.kcal / currentUser.dailyCalorieTarget) * 100) : 0;
 
             return (
               <GlassSurface key={meta.id} level="card" radius={Radius.large} style={styles.mealCard}>
                 <View style={styles.mealHeader}>
+                  <View style={[styles.mealIcon, { backgroundColor: theme.accentSoft }]}>
+                    <Icon name={meta.icon} size={18} color={theme.accent} />
+                  </View>
                   <View style={{ flex: 1, gap: 2 }}>
                     <ThemedText type="smallBold">{meta.label}</ThemedText>
                     <ThemedText type="caption" themeColor="textSecondary">
@@ -99,6 +135,15 @@ export default function NutritionScreen() {
                 <View style={[styles.macroTrack, { backgroundColor: theme.backgroundElement }]}>
                   <View style={[styles.macroFill, { width: `${progress * 100}%`, backgroundColor: theme.accent }]} />
                 </View>
+
+                {slotTotals.kcal > 0 ? (
+                  <View style={styles.macroBreakdownRow}>
+                    <MacroStat label="Gras" value={slotTotals.fats} />
+                    <MacroStat label="Carb" value={slotTotals.carbs} />
+                    <MacroStat label="Prot" value={slotTotals.protein} />
+                    <MacroStat label="GDA" value={gdaPct} suffix="%" />
+                  </View>
+                ) : null}
 
                 {slotEntries.length > 0 ? (
                   <View style={{ gap: Spacing.one }}>
@@ -131,8 +176,22 @@ export default function NutritionScreen() {
         </View>
       </View>
 
-      <FoodSearchModal visible={activeSlot != null} slot={activeSlot} date={today} onClose={() => setActiveSlot(null)} />
+      <FoodSearchModal visible={activeSlot != null} slot={activeSlot} date={selectedDate} onClose={() => setActiveSlot(null)} />
     </ScreenScroll>
+  );
+}
+
+function MacroStat({ label, value, suffix = 'g' }: { label: string; value: number; suffix?: string }) {
+  return (
+    <View style={styles.macroStat}>
+      <ThemedText type="caption" themeColor="textSecondary" style={{ fontSize: 11 }}>
+        {label}
+      </ThemedText>
+      <ThemedText type="caption" style={{ fontWeight: '700' }}>
+        {Math.round(value)}
+        {suffix}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -157,6 +216,14 @@ const styles = StyleSheet.create({
   mealHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.two,
+  },
+  mealIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addButton: {
     width: 32,
@@ -173,6 +240,15 @@ const styles = StyleSheet.create({
   macroFill: {
     height: '100%',
     borderRadius: 3,
+  },
+  macroBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.one,
+  },
+  macroStat: {
+    alignItems: 'center',
+    gap: 1,
   },
   foodRow: {
     flexDirection: 'row',

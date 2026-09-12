@@ -62,6 +62,11 @@ const ICONS = {
   trash: { set: 'ion', name: 'trash-outline' },
   footsteps: { set: 'mci', name: 'shoe-print' },
   moon: { set: 'ion', name: 'moon' },
+  mealSun: { set: 'ion', name: 'sunny' },
+  mealMidday: { set: 'ion', name: 'partly-sunny' },
+  mealMoon: { set: 'ion', name: 'moon' },
+  mealSnack: { set: 'ion', name: 'star' },
+  chevronUp: { set: 'ion', name: 'chevron-up' },
 } as const satisfies Record<string, { set: 'mci' | 'ion'; name: MCIName | IonName }>;
 
 export type IconName = keyof typeof ICONS;
