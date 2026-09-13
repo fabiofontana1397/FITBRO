@@ -15,8 +15,9 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   ACTIVITY_TO_SPORT,
   buildActivityQuestions,
+  findQuestion,
   isQuestionVisible,
-  ONBOARDING_STEPS,
+  labelFor,
   stepsForMode,
   type OnboardingMode,
   type OnboardingStep,
@@ -28,6 +29,7 @@ import { sportIcon } from '@/lib/mock/training';
 import type { Goal, Sex, Sport } from '@/lib/mock/types';
 import { useBodyStore } from '@/store/body-store';
 import { useOnboardingStore, type AnswerValue } from '@/store/onboarding-store';
+import { usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
 const MODE_OPTIONS: { value: OnboardingMode; label: string }[] = [
@@ -54,26 +56,13 @@ function sportsFromAnswers(answers: Record<string, AnswerValue>): Sport[] {
   return [...new Set(activitiesPracticed.map((a) => ACTIVITY_TO_SPORT[a]).filter(Boolean))] as Sport[];
 }
 
-/** Looks up a static question by id across the whole schema (used to render answer labels). */
-function findQuestion(id: string): Question | undefined {
-  for (const step of ONBOARDING_STEPS) {
-    const found = step.questions.find((q) => q.id === id);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-function labelFor(question: Question | undefined, value: unknown): string | undefined {
-  if (!question?.options || typeof value !== 'string') return undefined;
-  return question.options.find((o) => o.value === value)?.label;
-}
-
 export default function OnboardingScreen() {
   const theme = useTheme();
   const answers = useOnboardingStore((s) => s.answers);
   const setAnswer = useOnboardingStore((s) => s.setAnswer);
   const finalizeOnboarding = useUserStore((s) => s.finalizeOnboarding);
   const resetStartingWeight = useBodyStore((s) => s.resetStartingWeight);
+  const generatePlans = usePlanStore((s) => s.generatePlans);
 
   const [mode, setMode] = useState<OnboardingMode | null>((answers.mode as OnboardingMode) ?? null);
   const [screenIndex, setScreenIndex] = useState(0);
@@ -135,6 +124,7 @@ export default function OnboardingScreen() {
       hydrationTargetMl: results.hydrationTargetMl,
     });
     resetStartingWeight(Number(answers.currentWeightKg) || 80, daysAgoISO(0));
+    generatePlans(answers, { dailyCalorieTarget: results.dailyCalorieTarget, macroTargetsG: results.macroTargetsG });
     router.push('/onboarding-created');
   };
 

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -11,6 +12,7 @@ import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { PrimaryButton } from '@/components/ui/primary-button';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Radius, Spacing } from '@/constants/theme';
@@ -28,6 +30,8 @@ import {
   useNutritionStore,
   type MealSlot,
 } from '@/store/nutrition-store';
+import { useOnboardingStore } from '@/store/onboarding-store';
+import { usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
 export default function NutritionScreen() {
@@ -35,8 +39,21 @@ export default function NutritionScreen() {
   const currentUser = useUserStore();
   const entries = useNutritionStore((s) => s.entries);
   const removeEntry = useNutritionStore((s) => s.removeEntry);
+  const dietPlan = usePlanStore((s) => s.dietPlan);
+  const generatePlans = usePlanStore((s) => s.generatePlans);
+  const onboardingAnswers = useOnboardingStore((s) => s.answers);
   const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
+
+  useEffect(() => {
+    if (dietPlan || onboardingAnswers.mode === 'training') return;
+    generatePlans(onboardingAnswers, {
+      dailyCalorieTarget: currentUser.dailyCalorieTarget,
+      macroTargetsG: currentUser.macroTargetsG,
+    });
+    // Only needs to run once per missing-plan case, not on every keystroke of onboardingAnswers/currentUser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dietPlan]);
 
   const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
   const loggedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
@@ -107,6 +124,30 @@ export default function NutritionScreen() {
           </View>
         </GlassSurface>
       </Animated.View>
+
+      <View>
+        <SectionHeader title="Il tuo piano nutrizionale" />
+        <GlassSurface level="card" radius={Radius.large} style={styles.planCard}>
+          {dietPlan ? (
+            <>
+              <View style={{ flex: 1, gap: 2 }}>
+                <ThemedText type="smallBold">Piano di {dietPlan.durationMonths} mesi, {dietPlan.months.length} fasi</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {dietPlan.months[0].title}: {dietPlan.months[0].focusNote}
+                </ThemedText>
+              </View>
+              <PrimaryButton label="Vedi piano" onPress={() => router.push('/diet-plan')} style={styles.planButton} />
+            </>
+          ) : (
+            <View style={{ flex: 1, gap: 2 }}>
+              <ThemedText type="smallBold">Nessun piano generato</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Rifai il questionario in modalità “Piano alimentare” o “Entrambi” per generarne uno.
+              </ThemedText>
+            </View>
+          )}
+        </GlassSurface>
+      </View>
 
       <View>
         <SectionHeader title="I tuoi pasti" />
@@ -199,6 +240,15 @@ function MacroStat({ label, value, suffix = 'g' }: { label: string; value: numbe
 }
 
 const styles = StyleSheet.create({
+  planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+  },
+  planButton: {
+    flexShrink: 0,
+  },
   overviewCard: {
     padding: Spacing.four,
     gap: Spacing.four,

@@ -55,6 +55,8 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding-roadmap" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
           <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="diet-plan" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="training-plan" options={{ presentation: 'modal' }} />
         </Stack>
       </AuthGate>
     </ThemeProvider>

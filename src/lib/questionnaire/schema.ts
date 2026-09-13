@@ -28,6 +28,21 @@ export type OnboardingStep = {
   questions: Question[];
 };
 
+/** Looks up a static question by id across the whole schema (used to render answer labels). */
+export function findQuestion(id: string): Question | undefined {
+  for (const step of ONBOARDING_STEPS) {
+    const found = step.questions.find((q) => q.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Resolves a stored answer value to its human-readable option label. */
+export function labelFor(question: Question | undefined, value: unknown): string | undefined {
+  if (!question?.options || typeof value !== 'string') return undefined;
+  return question.options.find((o) => o.value === value)?.label;
+}
+
 export function isQuestionVisible(question: Question, answers: Record<string, unknown>): boolean {
   if (!question.dependsOn) return true;
   const value = answers[question.dependsOn.questionId];
