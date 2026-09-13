@@ -1,11 +1,15 @@
 import type { Href } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps } from 'expo-router/ui';
+import { useEffect } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { ChatFab } from '@/components/chat/chat-fab';
 import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
+import { SpringSnappy } from '@/constants/motion';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -43,9 +47,12 @@ function FloatingTabBar({ children }: { children?: React.ReactNode }) {
         { paddingBottom: Platform.select({ web: Spacing.four, default: insets.bottom || Spacing.three }) },
         { pointerEvents: 'box-none' },
       ]}>
-      <GlassSurface level="raised" radius={Radius.xlarge} style={styles.bar}>
-        <View style={styles.barRow}>{children}</View>
-      </GlassSurface>
+      <View style={styles.row}>
+        <GlassSurface level="raised" radius={Radius.xlarge} style={styles.bar}>
+          <View style={styles.barRow}>{children}</View>
+        </GlassSurface>
+        <ChatFab />
+      </View>
     </View>
   );
 }
@@ -53,10 +60,26 @@ function FloatingTabBar({ children }: { children?: React.ReactNode }) {
 function TabButton({ label, icon, isFocused, ...props }: TabTriggerSlotProps & { label: string; icon: IconName }) {
   const theme = useTheme();
   const color = isFocused ? theme.accent : theme.textTertiary;
+  const focus = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    focus.value = withSpring(isFocused ? 1 : 0, SpringSnappy);
+  }, [isFocused, focus]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: focus.value,
+    transform: [{ scale: 0.7 + focus.value * 0.3 }],
+  }));
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + focus.value * 0.16 }, { translateY: focus.value * -1.5 }],
+  }));
 
   return (
     <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
-      <Icon name={icon} size={22} color={color} />
+      <Animated.View style={[styles.focusPill, { backgroundColor: theme.accentSoft }, pillStyle]} />
+      <Animated.View style={iconStyle}>
+        <Icon name={icon} size={19} color={color} />
+      </Animated.View>
       <ThemedText type="caption" style={[styles.tabLabel, { color }]} numberOfLines={1}>
         {label}
       </ThemedText>
@@ -72,26 +95,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.three,
   },
-  bar: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     width: '100%',
     maxWidth: MaxContentWidth,
   },
+  bar: {
+    flex: 1,
+  },
   barRow: {
     flexDirection: 'row',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.one,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: Spacing.one,
+    gap: 2,
+    paddingVertical: 6,
   },
   pressed: {
     opacity: 0.6,
   },
+  focusPill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 6,
+    right: 6,
+    borderRadius: Radius.medium,
+  },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
   },
 });

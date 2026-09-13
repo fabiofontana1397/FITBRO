@@ -130,5 +130,5 @@ export const Radius = {
 // 'web' case, so this used to silently fall back to 0 on web — the
 // scrollable tab screens' actual primary target — leaving their last bit
 // of content hidden behind the tab bar with no way to scroll to it.
-export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 64 }) ?? 64;
+export const BottomTabInset = Platform.select({ ios: 44, android: 72, web: 56 }) ?? 56;
 export const MaxContentWidth = 900;
