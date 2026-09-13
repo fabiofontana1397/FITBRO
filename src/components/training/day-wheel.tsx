@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   scrollTo,
+  useAnimatedReaction,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -30,6 +33,7 @@ export type DayWheelProps = {
 };
 
 const ITEM_WIDTH = 56;
+const SNAP_TIMING = { duration: 320, easing: Easing.out(Easing.cubic) };
 // The plan reads day-by-day from today for the active ~30-day month, so the
 // wheel only ever needs to span that same window — scrolling into days
 // before the plan started, or past its current month, would show exercises
@@ -50,7 +54,20 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollX = useSharedValue(0);
   const reportedIndex = useSharedValue(-1);
+  const scrollAnimTarget = useSharedValue(0);
   const [containerWidth, setContainerWidth] = useState(0);
+
+  // Drives the actual scroll position from `scrollAnimTarget` every frame it
+  // moves, so a snap-correction eases in with our own curve (SNAP_TIMING)
+  // instead of the abrupt jump a plain `scrollTo(..., true)` produces.
+  useAnimatedReaction(
+    () => scrollAnimTarget.value,
+    (current, previous) => {
+      if (previous !== null && current !== previous) {
+        scrollTo(scrollRef, current, 0, false);
+      }
+    }
+  );
 
   const dates = useMemo(() => {
     const start = daysAgoISO(0);
@@ -77,17 +94,25 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
     [dates, onSelect, selectedDate]
   );
 
+  const animateScrollTo = useCallback((x: number) => {
+    // eslint-disable-next-line react-hooks/immutability
+    scrollAnimTarget.value = withTiming(x, SNAP_TIMING);
+    // scrollAnimTarget is a shared value — a stable ref, not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const snapToNearest = useCallback(
     (rawOffsetX: number) => {
       const index = Math.min(Math.max(Math.round(rawOffsetX / ITEM_WIDTH), 0), dates.length - 1);
       // `snapToInterval` isn't reliably honored on every platform (notably
       // web), so momentum can end at an offset sitting between two days —
       // always correct it to the nearest item's exact position rather than
-      // leaving the wheel resting between two numbers, unselected.
-      scrollTo(scrollRef, index * ITEM_WIDTH, 0, true);
+      // leaving the wheel resting between two numbers, unselected. Eased
+      // rather than snapped instantly so the correction reads as smooth.
+      animateScrollTo(index * ITEM_WIDTH);
       commitIndex(index);
     },
-    [commitIndex, dates.length, scrollRef]
+    [animateScrollTo, commitIndex, dates.length]
   );
 
   const handleSettle = useCallback(
@@ -137,9 +162,12 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
 
   useEffect(() => {
     if (containerWidth === 0 || selectedIndex < 0) return;
-    scrollTo(scrollRef, selectedIndex * ITEM_WIDTH, 0, false);
+    const x = selectedIndex * ITEM_WIDTH;
+    scrollTo(scrollRef, x, 0, false);
     // eslint-disable-next-line react-hooks/immutability
-    scrollX.value = selectedIndex * ITEM_WIDTH;
+    scrollX.value = x;
+    // eslint-disable-next-line react-hooks/immutability
+    scrollAnimTarget.value = x;
     // Re-sync only when the layout first measures or the selected date changes
     // from outside this component (e.g. a tap); our own settle already matches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,7 +203,7 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
                 selected={date === selectedDate}
                 dayType={dayTypeForDate(date)}
                 onPress={() => {
-                  scrollTo(scrollRef, index * ITEM_WIDTH, 0, true);
+                  animateScrollTo(index * ITEM_WIDTH);
                   commitIndex(index);
                 }}
               />
