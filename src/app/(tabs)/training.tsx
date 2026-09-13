@@ -121,20 +121,12 @@ export default function TrainingScreen() {
                 selectedMonth={monthIndex}
                 onSelectMonth={() => router.push('/training-plan')}
               />
-              <View style={styles.planActionsRow}>
-                <PrimaryButton
-                  variant="ghost"
-                  label="Mostra piano"
-                  icon="chevronRight"
-                  onPress={() => router.push('/training-plan')}
-                />
-                <PrimaryButton
-                  variant="ghost"
-                  label="Andamento carichi"
-                  icon="trendUp"
-                  onPress={() => router.push('/training-progress')}
-                />
-              </View>
+              <PrimaryButton
+                variant="ghost"
+                label="Mostra piano"
+                icon="chevronRight"
+                onPress={() => router.push('/training-plan')}
+              />
             </GlassSurface>
           </View>
 
@@ -154,7 +146,11 @@ export default function TrainingScreen() {
 
           {selectedDay?.type === 'workout' ? (
             <View>
-              <SectionHeader title={selectedDay.title} />
+              <SectionHeader
+                title={selectedDay.title}
+                icon="trendUp"
+                onIconPress={() => router.push('/training-progress')}
+              />
               <View style={{ gap: Spacing.three }}>
                 {(selectedDay.exercises ?? []).map((exercise) => {
                   const setsToday = setsForExerciseOnDate(progressSets, exercise.id, selectedDate);
@@ -213,9 +209,6 @@ const styles = StyleSheet.create({
   },
   planMetaDivider: {
     width: StyleSheet.hairlineWidth,
-  },
-  planActionsRow: {
-    gap: Spacing.two,
   },
   monthNavRow: {
     flexDirection: 'row',
