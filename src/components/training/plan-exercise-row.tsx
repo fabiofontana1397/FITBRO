@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { ExerciseInfoModal } from '@/components/training/exercise-info-modal';
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { getExerciseMedia } from '@/lib/exercise-media/exercise-media';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
 import type { LoggedSet } from '@/store/training-progress-store';
 
@@ -22,6 +24,8 @@ export type PlanExerciseRowProps = {
 export function PlanExerciseRow({ exercise, setsToday, history, latestWeightKg, onAddSet, onRemoveSet }: PlanExerciseRowProps) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const media = getExerciseMedia(exercise.id);
   const startingReps = (exercise.reps.match(/\d+/) ?? ['8'])[0];
   const [reps, setReps] = useState(startingReps);
   const [weight, setWeight] = useState(
@@ -41,22 +45,41 @@ export function PlanExerciseRow({ exercise, setsToday, history, latestWeightKg, 
 
   return (
     <GlassSurface level="card" radius={Radius.large}>
-      <Pressable onPress={() => setExpanded((e) => !e)} style={styles.header}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <ThemedText type="smallBold">{exercise.name}</ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary">
-            {exercise.sets}×{exercise.reps} · recupero {exercise.restSec < 60 ? `${exercise.restSec}s` : `${Math.round(exercise.restSec / 60)} min`}
-          </ThemedText>
-        </View>
-        {bestToday != null ? (
-          <View style={[styles.badge, { backgroundColor: theme.accentSoft }]}>
-            <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
-              {bestToday}kg
+      <View style={styles.header}>
+        <Pressable onPress={() => setExpanded((e) => !e)} style={styles.headerMain}>
+          {media ? (
+            <Image source={{ uri: media.gifUrl }} style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
+          ) : (
+            <View style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
+          )}
+          <View style={{ flex: 1, gap: 2 }}>
+            <ThemedText type="smallBold">{exercise.name}</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {exercise.sets}×{exercise.reps} · recupero {exercise.restSec < 60 ? `${exercise.restSec}s` : `${Math.round(exercise.restSec / 60)} min`}
             </ThemedText>
           </View>
-        ) : null}
-        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={18} color={theme.textTertiary} />
-      </Pressable>
+          {bestToday != null ? (
+            <View style={[styles.badge, { backgroundColor: theme.accentSoft }]}>
+              <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
+                {bestToday}kg
+              </ThemedText>
+            </View>
+          ) : null}
+        </Pressable>
+        <Pressable onPress={() => setInfoOpen(true)} hitSlop={8} style={styles.iconButton}>
+          <Icon name="info" size={20} color={theme.textSecondary} />
+        </Pressable>
+        <Pressable onPress={() => setExpanded((e) => !e)} hitSlop={8} style={styles.iconButton}>
+          <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={18} color={theme.textTertiary} />
+        </Pressable>
+      </View>
+
+      <ExerciseInfoModal
+        visible={infoOpen}
+        exerciseName={exercise.name}
+        media={media}
+        onClose={() => setInfoOpen(false)}
+      />
 
       {expanded ? (
         <View style={styles.body}>
@@ -135,8 +158,22 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.one,
     padding: Spacing.three,
+  },
+  headerMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.medium,
+  },
+  iconButton: {
+    padding: 4,
   },
   badge: {
     paddingHorizontal: Spacing.two,
