@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { ExerciseInfoModal } from '@/components/training/exercise-info-modal';
 import { PlanTimeline } from '@/components/training/plan-timeline';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
@@ -18,7 +19,7 @@ import { usePlanStore } from '@/store/plan-store';
 import { latestWeightForExercise, useTrainingProgressStore } from '@/store/training-progress-store';
 import { useUserStore } from '@/store/user-store';
 
-type DayItem = { key: string; exerciseId?: string; name: string; subtitle: string; carico: string | null };
+type DayItem = { key: string; exerciseId?: string; name: string; subtitle: string };
 type DayGroup = { weekday: string; title: string; icon: 'gym' | 'running'; items: DayItem[] };
 
 export default function TrainingPlanScreen() {
@@ -45,10 +46,8 @@ export default function TrainingPlanScreen() {
             title: day.title,
             icon: 'gym',
             items: (day.exercises ?? []).map((ex) => {
-              const logged = latestWeightForExercise(progressSets, ex.id);
-              const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : null;
               const rest = ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`;
-              return { key: ex.id, exerciseId: ex.id, name: ex.name, subtitle: `${ex.sets}×${ex.reps} · recupero ${rest}`, carico };
+              return { key: ex.id, exerciseId: ex.id, name: ex.name, subtitle: `${ex.sets}×${ex.reps} · recupero ${rest}` };
             }),
           };
         }
@@ -56,10 +55,10 @@ export default function TrainingPlanScreen() {
           weekday: day.weekday,
           title: day.title,
           icon: 'running',
-          items: [{ key: day.weekday, name: day.title, subtitle: day.note ?? '', carico: null }],
+          items: [{ key: day.weekday, name: day.title, subtitle: day.note ?? '' }],
         };
       });
-  }, [selectedMonthData, progressSets]);
+  }, [selectedMonthData]);
 
   const goalLabel = labelFor(findQuestion('goal'), answers.goal) ?? '';
 
@@ -197,11 +196,6 @@ export default function TrainingPlanScreen() {
                   </View>
                 ))}
               </View>
-
-              <ThemedText type="caption" themeColor="textTertiary">
-                ~ = carico consigliato per iniziare. Registra le tue serie nel piano per sostituirlo con il carico
-                reale.
-              </ThemedText>
             </>
           )}
         </>
@@ -212,6 +206,7 @@ export default function TrainingPlanScreen() {
 
 function ExerciseSummaryCard({ item }: { item: DayItem }) {
   const theme = useTheme();
+  const [infoOpen, setInfoOpen] = useState(false);
   const media = item.exerciseId ? getExerciseMedia(item.exerciseId) : undefined;
 
   return (
@@ -229,13 +224,18 @@ function ExerciseSummaryCard({ item }: { item: DayItem }) {
           </ThemedText>
         ) : null}
       </View>
-      {item.carico ? (
-        <View style={[styles.caricoBadge, { backgroundColor: theme.accentSoft }]}>
-          <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
-            {item.carico}
-          </ThemedText>
-        </View>
+      {item.exerciseId ? (
+        <Pressable onPress={() => setInfoOpen(true)} hitSlop={8} style={styles.infoButton}>
+          <Icon name="info" size={20} color={theme.textSecondary} />
+        </Pressable>
       ) : null}
+
+      <ExerciseInfoModal
+        visible={infoOpen}
+        exerciseName={item.name}
+        media={media}
+        onClose={() => setInfoOpen(false)}
+      />
     </GlassSurface>
   );
 }
@@ -281,10 +281,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: Radius.medium,
   },
-  caricoBadge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
+  infoButton: {
+    padding: 4,
   },
   lockedCard: {
     alignItems: 'center',
