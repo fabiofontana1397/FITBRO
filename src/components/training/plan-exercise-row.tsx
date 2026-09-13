@@ -70,20 +70,6 @@ export function PlanExerciseRow({
           <ThemedText type="smallBold" style={completed ? { textDecorationLine: 'line-through' } : undefined}>
             {exercise.name}
           </ThemedText>
-          {!isBodyweight && referenceKg != null ? (
-            <View style={[styles.loadChip, { backgroundColor: theme.accentSoft }]}>
-              <Icon name={isFirstTime ? 'sparkle' : 'scale'} size={12} color={theme.accent} />
-              <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
-                {referenceKg}kg{isFirstTime ? ' consigliato' : ''}
-              </ThemedText>
-            </View>
-          ) : isBodyweight ? (
-            <View style={[styles.loadChip, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                corpo libero
-              </ThemedText>
-            </View>
-          ) : null}
         </View>
 
         <Pressable onPress={() => setInfoOpen(true)} hitSlop={8} style={styles.iconButton}>
@@ -98,6 +84,11 @@ export function PlanExerciseRow({
               {exercise.sets}×{exercise.reps}
             </ThemedText>
           </View>
+          {!isBodyweight && referenceKg != null ? (
+            <ThemedText type="smallBold">
+              {isFirstTime ? 'Consigliato' : 'Ultimo carico'} {referenceKg}kg
+            </ThemedText>
+          ) : null}
           <ThemedText type="caption" themeColor="textSecondary">
             Recupero {restLabel}
           </ThemedText>
@@ -129,8 +120,8 @@ export function PlanExerciseRow({
             </ThemedText>
           ) : null}
           <Pressable onPress={() => setLoadModalOpen(true)} style={[styles.newLoadButton, { backgroundColor: theme.accent }]}>
-            <Icon name="addCircle" size={16} color={theme.onAccent} />
-            <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
+            <Icon name="addCircle" size={13} color={theme.onAccent} />
+            <ThemedText type="caption" style={{ color: theme.onAccent, fontWeight: '700' }}>
               Nuovo carico
             </ThemedText>
           </Pressable>
@@ -213,21 +204,10 @@ const styles = StyleSheet.create({
   },
   infoColumn: {
     flex: 1,
-    gap: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   iconButton: {
     padding: 4,
-  },
-  loadChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
   },
   splitRow: {
     flexDirection: 'row',
@@ -260,9 +240,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
-    width: '100%',
   },
 });
