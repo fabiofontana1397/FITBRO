@@ -125,5 +125,10 @@ export const Radius = {
   pill: 999,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+// Clearance for the floating tab bar's own height (excludes the safe-area
+// gap under it, which callers add separately). Platform.select has no
+// 'web' case, so this used to silently fall back to 0 on web — the
+// scrollable tab screens' actual primary target — leaving their last bit
+// of content hidden behind the tab bar with no way to scroll to it.
+export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 64 }) ?? 64;
 export const MaxContentWidth = 900;

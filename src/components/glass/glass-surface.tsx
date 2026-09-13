@@ -79,18 +79,25 @@ export function GlassSurface({
         end={{ x: 0.4, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <View
-        style={[
-          styles.content,
-          bordered && {
-            borderRadius: radius,
-            borderWidth: StyleSheet.hairlineWidth * 1.5,
-            borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(14,14,17,0.10)',
-            borderTopColor: isDark ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.9)',
-          },
-        ]}>
-        {children}
-      </View>
+      {bordered ? (
+        // An absolute overlay (not a padded child) so the hairline always
+        // traces the surface's true outer edge, even when `style` adds
+        // padding — a padded sibling would otherwise shrink the border
+        // inward, leaving a floating rectangle inside the card.
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: radius,
+              borderWidth: StyleSheet.hairlineWidth * 1.5,
+              borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(14,14,17,0.10)',
+              borderTopColor: isDark ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.9)',
+            },
+          ]}
+        />
+      ) : null}
+      <View style={styles.content}>{children}</View>
     </View>
   );
 }
