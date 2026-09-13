@@ -28,10 +28,10 @@ import { useBodyStore } from '@/store/body-store';
 import { useOnboardingStore, type AnswerValue } from '@/store/onboarding-store';
 import { useUserStore } from '@/store/user-store';
 
-const MODE_OPTIONS: { value: OnboardingMode; label: string; description: string }[] = [
-  { value: 'diet', label: 'Solo piano alimentare', description: 'Domande su alimentazione e abitudini, niente allenamento.' },
-  { value: 'training', label: 'Solo piano di allenamento', description: 'Domande su sport e disponibilità, niente dieta.' },
-  { value: 'both', label: 'Entrambi', description: 'Il percorso completo: dieta e allenamento insieme.' },
+const MODE_OPTIONS: { value: OnboardingMode; label: string }[] = [
+  { value: 'diet', label: 'Piano alimentare' },
+  { value: 'training', label: 'Programma di allenamento' },
+  { value: 'both', label: 'Entrambi' },
 ];
 
 function isAnswered(value: AnswerValue): boolean {
@@ -142,12 +142,9 @@ export default function OnboardingScreen() {
                         radius={Radius.large}
                         style={[styles.optionRow, selected && ({ borderColor: theme.accent } as any)]}>
                         <View style={styles.optionInner}>
-                          <View style={{ flex: 1, gap: 2 }}>
-                            <ThemedText type="smallBold">{option.label}</ThemedText>
-                            <ThemedText type="caption" themeColor="textSecondary">
-                              {option.description}
-                            </ThemedText>
-                          </View>
+                          <ThemedText type="smallBold" style={{ flex: 1 }}>
+                            {option.label}
+                          </ThemedText>
                           {selected ? <Icon name="checkCircle" size={20} color={theme.accent} /> : null}
                         </View>
                       </GlassSurface>
