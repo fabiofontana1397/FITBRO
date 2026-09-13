@@ -36,3 +36,21 @@ export const usePlanStore = create<PlanState>()(
     { name: 'fitbro/plans', storage: appJsonStorage }
   )
 );
+
+/**
+ * True if every workout exercise in the plan has the fields the current
+ * code expects (`id`, `suggestedKg`). Plans generated before those fields
+ * existed persist forever otherwise — zustand's persist `version`/`migrate`
+ * can't catch this retroactively, since it only fires when the *stored*
+ * blob already carries a numeric version to compare against (every plan
+ * saved before versioning existed has none at all). Callers should treat
+ * an invalid plan the same as a missing one and regenerate it.
+ */
+export function isValidTrainingPlan(plan: TrainingPlan | null): boolean {
+  if (!plan) return false;
+  return plan.months.every((month) =>
+    month.weeklySplit.every(
+      (day) => day.type !== 'workout' || (day.exercises ?? []).every((ex) => typeof ex.id === 'string' && ex.id.length > 0)
+    )
+  );
+}

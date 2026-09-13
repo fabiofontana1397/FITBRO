@@ -18,7 +18,7 @@ import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/moc
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingDayPlan } from '@/lib/planning/types';
 import { useOnboardingStore } from '@/store/onboarding-store';
-import { usePlanStore } from '@/store/plan-store';
+import { isValidTrainingPlan, usePlanStore } from '@/store/plan-store';
 import {
   historyForExercise,
   latestWeightForExercise,
@@ -54,12 +54,12 @@ export default function TrainingScreen() {
   const goToNextWeek = () => setSelectedDate((d) => addDaysISO(d, 7));
 
   useEffect(() => {
-    if (trainingPlan || onboardingAnswers.mode === 'diet') return;
+    if (isValidTrainingPlan(trainingPlan) || onboardingAnswers.mode === 'diet') return;
     generatePlans(onboardingAnswers, {
       dailyCalorieTarget: currentUser.dailyCalorieTarget,
       macroTargetsG: currentUser.macroTargetsG,
     });
-    // Only needs to run once per missing-plan case, not on every keystroke of onboardingAnswers/currentUser.
+    // Only needs to run once per missing/invalid-plan case, not on every keystroke of onboardingAnswers/currentUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainingPlan]);
 
