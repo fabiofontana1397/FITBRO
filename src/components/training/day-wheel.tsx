@@ -165,7 +165,6 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
             onScroll={scrollHandler}
             scrollEventThrottle={16}
             onMomentumScrollEnd={handleSettle}
-            onScrollEndDrag={handleSettle}
             contentContainerStyle={{ paddingHorizontal: sidePadding }}>
             {dates.map((date, index) => (
               <DayWheelItem
