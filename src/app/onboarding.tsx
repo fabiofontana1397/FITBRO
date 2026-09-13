@@ -10,13 +10,13 @@ import { ThemedText } from '@/components/themed-text';
 import { FadeInView } from '@/components/ui/fade-in-view';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ProgressRing } from '@/components/ui/progress-ring';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   ACTIVITY_TO_SPORT,
   buildActivityQuestions,
   isQuestionVisible,
+  ONBOARDING_STEPS,
   stepsForMode,
   type OnboardingMode,
   type OnboardingStep,
@@ -24,7 +24,7 @@ import {
 } from '@/lib/questionnaire/schema';
 import { computeNutritionTargets, deriveWeeklyTrainingDays } from '@/lib/nutrition/targets';
 import { daysAgoISO } from '@/lib/mock/dates';
-import { sportIcon, sportMeta } from '@/lib/mock/training';
+import { sportIcon } from '@/lib/mock/training';
 import type { Goal, Sex, Sport } from '@/lib/mock/types';
 import { useBodyStore } from '@/store/body-store';
 import { useOnboardingStore, type AnswerValue } from '@/store/onboarding-store';
@@ -35,30 +35,6 @@ const MODE_OPTIONS: { value: OnboardingMode; label: string }[] = [
   { value: 'training', label: 'Programma di allenamento' },
   { value: 'both', label: 'Entrambi' },
 ];
-
-const AGE_LABEL: Record<string, string> = {
-  lt18: 'Meno di 18',
-  '18-24': '18–24',
-  '25-34': '25–34',
-  '35-44': '35–44',
-  '45-54': '45–54',
-  '55+': '55+',
-};
-
-const SEX_LABEL: Record<string, string> = {
-  male: 'Uomo',
-  female: 'Donna',
-  unspecified: 'Non specificato',
-};
-
-const GOAL_LABEL: Record<Goal, string> = {
-  loseFat: 'Perdere grasso',
-  gainMuscle: 'Aumentare massa muscolare',
-  maintainImprove: 'Mantenimento e forma fisica',
-  gainStrength: 'Aumentare forza',
-  improveEndurance: 'Migliorare resistenza',
-  generalHealth: 'Salute generale',
-};
 
 function isAnswered(value: AnswerValue): boolean {
   if (Array.isArray(value)) return value.length > 0;
@@ -78,6 +54,20 @@ function sportsFromAnswers(answers: Record<string, AnswerValue>): Sport[] {
   return [...new Set(activitiesPracticed.map((a) => ACTIVITY_TO_SPORT[a]).filter(Boolean))] as Sport[];
 }
 
+/** Looks up a static question by id across the whole schema (used to render answer labels). */
+function findQuestion(id: string): Question | undefined {
+  for (const step of ONBOARDING_STEPS) {
+    const found = step.questions.find((q) => q.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function labelFor(question: Question | undefined, value: unknown): string | undefined {
+  if (!question?.options || typeof value !== 'string') return undefined;
+  return question.options.find((o) => o.value === value)?.label;
+}
+
 export default function OnboardingScreen() {
   const theme = useTheme();
   const answers = useOnboardingStore((s) => s.answers);
@@ -94,6 +84,8 @@ export default function OnboardingScreen() {
   const step = !isIntroScreen && !isResultsScreen ? activeSteps[screenIndex - 1] : null;
   const stepQuestions = useMemo(() => (step ? getStepQuestions(step, answers) : []), [step, answers]);
   const sports = useMemo(() => sportsFromAnswers(answers), [answers]);
+  const activitiesPracticed = useMemo(() => (answers.activitiesPracticed as string[]) ?? [], [answers.activitiesPracticed]);
+  const activityQuestions = useMemo(() => buildActivityQuestions(activitiesPracticed), [activitiesPracticed]);
 
   const canContinue = useMemo(() => {
     if (isIntroScreen) return mode != null;
@@ -221,7 +213,7 @@ export default function OnboardingScreen() {
           </>
         ) : null}
 
-        {isResultsScreen && results ? (
+        {isResultsScreen ? (
           <View style={{ gap: Spacing.five }}>
             <View style={{ gap: Spacing.one }}>
               <ThemedText type="label" themeColor="textSecondary">
@@ -239,7 +231,7 @@ export default function OnboardingScreen() {
                   <FactTile
                     icon="target"
                     label="Obiettivo"
-                    value={GOAL_LABEL[(answers.goal as Goal) ?? 'generalHealth']}
+                    value={labelFor(findQuestion('goal'), answers.goal) ?? '–'}
                   />
                   <FactTile
                     icon="scale"
@@ -250,47 +242,67 @@ export default function OnboardingScreen() {
                   <FactTile
                     icon="calendar"
                     label="Età · Sesso"
-                    value={`${AGE_LABEL[(answers.ageRange as string) ?? '25-34']} · ${SEX_LABEL[(answers.sex as string) ?? 'unspecified']}`}
+                    value={`${labelFor(findQuestion('ageRange'), answers.ageRange) ?? '–'} · ${labelFor(findQuestion('sex'), answers.sex) ?? '–'}`}
                   />
                 </View>
               </GlassSurface>
             </FadeInView>
 
-            {sports.length > 0 ? (
-              <FadeInView delay={160} style={{ gap: Spacing.two }}>
-                <ThemedText type="smallBold">Attività</ThemedText>
-                <View style={styles.sportsRow}>
-                  {sports.map((sport) => (
-                    <View key={sport} style={[styles.sportChip, { backgroundColor: theme.accentSoft }]}>
-                      <Icon name={sportIcon[sport]} size={16} color={theme.accent} />
-                      <ThemedText type="caption">{sportMeta[sport].label}</ThemedText>
-                    </View>
-                  ))}
-                </View>
+            {mode !== 'training' ? (
+              <FadeInView delay={160}>
+                <SummarySection icon="nutrition" title="Alimentazione">
+                  <InfoRow
+                    label="Pattern alimentare"
+                    value={labelFor(findQuestion('dietaryPattern'), answers.dietaryPattern) ?? 'Nessuna preferenza'}
+                  />
+                  <InfoRow
+                    label="Pasti al giorno"
+                    value={labelFor(findQuestion('mealsPerDay'), answers.mealsPerDay) ?? '–'}
+                  />
+                  {answers.allergies ? <InfoRow label="Allergie" value={String(answers.allergies)} /> : null}
+                  {answers.intolerances ? <InfoRow label="Intolleranze" value={String(answers.intolerances)} /> : null}
+                </SummarySection>
               </FadeInView>
             ) : null}
 
-            <FadeInView delay={240}>
-              <GlassSurface
-                level="raised"
-                radius={Radius.large}
-                style={{ padding: Spacing.four, alignItems: 'center', gap: Spacing.four }}>
-                <ProgressRing size={140} strokeWidth={12} progress={1} color={theme.accent} trackColor={theme.backgroundElement}>
-                  <ThemedText type="title">{results.dailyCalorieTarget}</ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    kcal / giorno
-                  </ThemedText>
-                </ProgressRing>
-                <View style={styles.macroRow}>
-                  <MacroStat icon="protein" label="Proteine" value={results.macroTargetsG.protein} />
-                  <MacroStat icon="carbs" label="Carboidrati" value={results.macroTargetsG.carbs} />
-                  <MacroStat icon="fats" label="Grassi" value={results.macroTargetsG.fats} />
-                </View>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Idratazione consigliata: {(results.hydrationTargetMl / 1000).toFixed(1)} L / giorno
-                </ThemedText>
-              </GlassSurface>
-            </FadeInView>
+            {mode !== 'diet' ? (
+              <FadeInView delay={240}>
+                <SummarySection icon="training" title="Allenamento">
+                  {activitiesPracticed.length > 0 ? (
+                    <View style={styles.sportsRow}>
+                      {activitiesPracticed.map((activity) => {
+                        const freqLabel = labelFor(
+                          activityQuestions.find((q) => q.id === `freq_${activity}`),
+                          answers[`freq_${activity}`]
+                        );
+                        const activityLabel = labelFor(findQuestion('activitiesPracticed'), activity) ?? activity;
+                        return (
+                          <View key={activity} style={[styles.sportChip, { backgroundColor: theme.accentSoft }]}>
+                            <Icon name={sportIcon[ACTIVITY_TO_SPORT[activity]] ?? 'otherSport'} size={16} color={theme.accent} />
+                            <ThemedText type="caption">
+                              {activityLabel}
+                              {freqLabel ? ` · ${freqLabel}` : ''}
+                            </ThemedText>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                  <InfoRow
+                    label="Giorni disponibili"
+                    value={labelFor(findQuestion('availableDays'), answers.availableDays) ?? '–'}
+                  />
+                  <InfoRow
+                    label="Durata sessione"
+                    value={labelFor(findQuestion('sessionDuration'), answers.sessionDuration) ?? '–'}
+                  />
+                  <InfoRow
+                    label="Dove ti alleni"
+                    value={labelFor(findQuestion('trainingLocation'), answers.trainingLocation) ?? '–'}
+                  />
+                </SummarySection>
+              </FadeInView>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -322,14 +334,31 @@ function FactTile({ icon, label, value }: { icon: IconName; label: string; value
   );
 }
 
-function MacroStat({ icon, label, value }: { icon: IconName; label: string; value: number }) {
+function SummarySection({ icon, title, children }: { icon: IconName; title: string; children: React.ReactNode }) {
   const theme = useTheme();
   return (
-    <View style={styles.macroStat}>
-      <Icon name={icon} size={18} color={theme.accent} />
-      <ThemedText type="smallBold">{value}g</ThemedText>
-      <ThemedText type="caption" themeColor="textSecondary">
+    <View style={{ gap: Spacing.two }}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={[styles.sectionIcon, { backgroundColor: theme.accentSoft }]}>
+          <Icon name={icon} size={16} color={theme.accent} />
+        </View>
+        <ThemedText type="smallBold">{title}</ThemedText>
+      </View>
+      <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.three }}>
+        {children}
+      </GlassSurface>
+    </View>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
         {label}
+      </ThemedText>
+      <ThemedText type="smallBold" style={{ flex: 1, textAlign: 'right' }}>
+        {value}
       </ThemedText>
     </View>
   );
@@ -371,6 +400,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  sectionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sportsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -384,13 +425,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: Radius.pill,
   },
-  macroRow: {
+  infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  macroStat: {
-    alignItems: 'center',
-    gap: 2,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
   },
 });
