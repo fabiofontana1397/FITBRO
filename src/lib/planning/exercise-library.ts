@@ -95,15 +95,31 @@ export const HOME_EXERCISES: Record<SplitLabel, ExerciseDef[]> = {
   ],
 };
 
-export type SetScheme = { sets: number; reps: string; restSec: number };
+export type SetScheme = { sets: number; reps: string; restSec: number; tempo: string };
 
-/** Sets/reps/rest per gym focus goal, adattamento vs. later phases (progressione/consolidamento share one scheme). */
+/** Sets/reps/rest/tempo per gym focus goal, adattamento vs. later phases (progressione/consolidamento share one scheme).
+ * Tempo is "eccentric-isometric-concentric" in seconds, e.g. "3-0-1" = 3s negativa, 0s isometria, 1s spinta. */
 export const FOCUS_SCHEME: Record<string, { adattamento: SetScheme; later: SetScheme }> = {
-  strength: { adattamento: { sets: 3, reps: '10-12', restSec: 90 }, later: { sets: 5, reps: '3-5', restSec: 180 } },
-  hypertrophy: { adattamento: { sets: 3, reps: '12', restSec: 75 }, later: { sets: 4, reps: '8-12', restSec: 90 } },
-  fatLoss: { adattamento: { sets: 3, reps: '15', restSec: 45 }, later: { sets: 3, reps: '12-15', restSec: 45 } },
-  muscularEndurance: { adattamento: { sets: 3, reps: '15', restSec: 45 }, later: { sets: 4, reps: '15-20', restSec: 45 } },
-  technique: { adattamento: { sets: 3, reps: '10', restSec: 90 }, later: { sets: 3, reps: '10', restSec: 90 } },
+  strength: {
+    adattamento: { sets: 3, reps: '10-12', restSec: 90, tempo: '3-1-1' },
+    later: { sets: 5, reps: '3-5', restSec: 180, tempo: '3-1-1' },
+  },
+  hypertrophy: {
+    adattamento: { sets: 3, reps: '12', restSec: 75, tempo: '3-0-1' },
+    later: { sets: 4, reps: '8-12', restSec: 90, tempo: '3-0-1' },
+  },
+  fatLoss: {
+    adattamento: { sets: 3, reps: '15', restSec: 45, tempo: '2-0-1' },
+    later: { sets: 3, reps: '12-15', restSec: 45, tempo: '2-0-1' },
+  },
+  muscularEndurance: {
+    adattamento: { sets: 3, reps: '15', restSec: 45, tempo: '2-0-1' },
+    later: { sets: 4, reps: '15-20', restSec: 45, tempo: '2-0-1' },
+  },
+  technique: {
+    adattamento: { sets: 3, reps: '10', restSec: 90, tempo: '3-1-1' },
+    later: { sets: 3, reps: '10', restSec: 90, tempo: '3-1-1' },
+  },
 };
 
 /** Weekly running session types per focus goal, adattamento vs. later phases. Cycled if there are more run days than entries. */

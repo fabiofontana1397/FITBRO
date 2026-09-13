@@ -14,6 +14,16 @@ import { useTheme } from '@/hooks/use-theme';
 import { getExerciseMedia } from '@/lib/exercise-media/exercise-media';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
 
+const TEMPO_PHASE_LABELS = ['negativa', 'isometria', 'spinta'];
+
+/** "3-0-1" -> "3s negativa · 0s isometria · 1s spinta" — the standard
+ * eccentric/isometric/concentric cadence notation used in the plan. */
+function describeTempo(tempo: string): string | null {
+  const parts = tempo.split('-');
+  if (parts.length !== 3) return null;
+  return parts.map((seconds, i) => `${seconds}s ${TEMPO_PHASE_LABELS[i]}`).join(' · ');
+}
+
 export type PlanExerciseRowProps = {
   exercise: TrainingExerciseEntry;
   history: { date: string; weightKg: number }[];
@@ -42,6 +52,8 @@ export function PlanExerciseRow({
   const isBodyweight = exercise.suggestedKg == null && latestWeightKg == null;
   const isFirstTime = latestWeightKg == null;
   const referenceKg = latestWeightKg ?? exercise.suggestedKg;
+  const restLabel = exercise.restSec < 60 ? `${exercise.restSec}s` : `${Math.round(exercise.restSec / 60)} min`;
+  const tempoDescription = describeTempo(exercise.tempo);
 
   return (
     <GlassSurface level="card" radius={Radius.large} style={[styles.card, completed ? { opacity: 0.72 } : undefined]}>
@@ -58,30 +70,20 @@ export function PlanExerciseRow({
           <ThemedText type="smallBold" style={completed ? { textDecorationLine: 'line-through' } : undefined}>
             {exercise.name}
           </ThemedText>
-          <View style={styles.chipRow}>
-            <View style={[styles.targetChip, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText type="caption" style={{ fontWeight: '700' }}>
-                {exercise.sets}×{exercise.reps}
+          {!isBodyweight && referenceKg != null ? (
+            <View style={[styles.loadChip, { backgroundColor: theme.accentSoft }]}>
+              <Icon name={isFirstTime ? 'sparkle' : 'scale'} size={12} color={theme.accent} />
+              <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
+                {referenceKg}kg{isFirstTime ? ' consigliato' : ''}
               </ThemedText>
             </View>
-            {!isBodyweight && referenceKg != null ? (
-              <View style={[styles.loadChip, { backgroundColor: theme.accentSoft }]}>
-                <Icon name={isFirstTime ? 'sparkle' : 'scale'} size={12} color={theme.accent} />
-                <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
-                  {referenceKg}kg{isFirstTime ? ' consigliato' : ''}
-                </ThemedText>
-              </View>
-            ) : isBodyweight ? (
-              <View style={[styles.loadChip, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  corpo libero
-                </ThemedText>
-              </View>
-            ) : null}
-          </View>
-          <ThemedText type="caption" themeColor="textTertiary">
-            recupero {exercise.restSec < 60 ? `${exercise.restSec}s` : `${Math.round(exercise.restSec / 60)} min`}
-          </ThemedText>
+          ) : isBodyweight ? (
+            <View style={[styles.loadChip, { backgroundColor: theme.backgroundElement }]}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                corpo libero
+              </ThemedText>
+            </View>
+          ) : null}
         </View>
 
         <Pressable onPress={() => setInfoOpen(true)} hitSlop={8} style={styles.iconButton}>
@@ -89,32 +91,43 @@ export function PlanExerciseRow({
         </Pressable>
       </View>
 
-      <View style={styles.body}>
-        {history.length >= 2 ? (
-          <View style={styles.chartRow}>
-            <ThemedText type="caption" themeColor="textSecondary" style={{ flex: 1 }}>
-              Andamento carico ({history[0].weightKg}kg → {history[history.length - 1].weightKg}kg)
+      <View style={styles.splitRow}>
+        <View style={styles.leftCol}>
+          <View style={[styles.targetChip, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="subtitle">
+              {exercise.sets}×{exercise.reps}
             </ThemedText>
-            <TrendChart data={history.map((h) => h.weightKg)} width={110} height={36} color={theme.accent} />
           </View>
-        ) : !isBodyweight ? (
           <ThemedText type="caption" themeColor="textSecondary">
-            Carico consigliato per iniziare: {exercise.suggestedKg}kg. Registralo man mano che progredisci.
+            Recupero {restLabel}
           </ThemedText>
-        ) : (
-          <ThemedText type="caption" themeColor="textSecondary">
-            Esercizio a corpo libero — aggiungi un carico se lo appesantisci.
-          </ThemedText>
-        )}
+          {tempoDescription ? (
+            <View style={styles.tempoBlock}>
+              <ThemedText type="label" themeColor="textSecondary">
+                Tempo {exercise.tempo}
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textTertiary">
+                {tempoDescription}
+              </ThemedText>
+            </View>
+          ) : null}
+        </View>
 
-        <View style={styles.footerRow}>
+        <View style={styles.rightCol}>
+          {history.length >= 2 ? (
+            <TrendChart data={history.map((h) => h.weightKg)} width={128} height={44} color={theme.accent} />
+          ) : (
+            <ThemedText type="caption" themeColor="textTertiary" style={styles.chartHint}>
+              {isBodyweight
+                ? 'Aggiungi un carico se appesantisci l’esercizio.'
+                : `Consigliato: ${exercise.suggestedKg}kg`}
+            </ThemedText>
+          )}
           {loggedTodayKg != null ? (
             <ThemedText type="caption" themeColor="textSecondary">
               Aggiornato oggi: {loggedTodayKg}kg
             </ThemedText>
-          ) : (
-            <View />
-          )}
+          ) : null}
           <Pressable onPress={() => setLoadModalOpen(true)} style={[styles.newLoadButton, { backgroundColor: theme.accent }]}>
             <Icon name="addCircle" size={16} color={theme.onAccent} />
             <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
@@ -201,20 +214,12 @@ const styles = StyleSheet.create({
   infoColumn: {
     flex: 1,
     gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   iconButton: {
     padding: 4,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  targetChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.small,
   },
   loadChip: {
     flexDirection: 'row',
@@ -224,26 +229,40 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.pill,
   },
-  body: {
-    gap: Spacing.two,
-  },
-  chartRow: {
+  splitRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: Spacing.three,
   },
-  footerRow: {
-    flexDirection: 'row',
+  leftCol: {
+    flex: 1,
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  targetChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: Radius.small,
+  },
+  tempoBlock: {
+    marginTop: 4,
+    gap: 2,
+  },
+  rightCol: {
+    width: 132,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
+    gap: 6,
+  },
+  chartHint: {
+    textAlign: 'center',
   },
   newLoadButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: 10,
     borderRadius: Radius.pill,
-    marginLeft: 'auto',
+    width: '100%',
   },
 });

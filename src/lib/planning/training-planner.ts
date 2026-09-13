@@ -105,6 +105,7 @@ export function generateTrainingPlan(input: TrainingPlanInput): TrainingPlan | n
         sets: scheme.sets,
         reps: scheme.reps,
         restSec: scheme.restSec,
+        tempo: scheme.tempo,
         suggestedKg: suggestedLoadFor(def, bodyweightKg, phase === 'adattamento'),
       }));
       week[dayIdx] = { weekday: WEEKDAY_LABELS[dayIdx], type: 'workout', title: splitLabel, exercises };

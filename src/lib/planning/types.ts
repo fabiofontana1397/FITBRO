@@ -37,6 +37,8 @@ export type TrainingExerciseEntry = {
   restSec: number;
   /** Conservative starting point in kg, or null for bodyweight/band exercises with no load to suggest. */
   suggestedKg: number | null;
+  /** Execution cadence in seconds as "eccentric-isometric-concentric", e.g. "3-0-1". */
+  tempo: string;
 };
 
 export type TrainingDayPlan = {

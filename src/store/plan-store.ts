@@ -50,7 +50,11 @@ export function isValidTrainingPlan(plan: TrainingPlan | null): boolean {
   if (!plan) return false;
   return plan.months.every((month) =>
     month.weeklySplit.every(
-      (day) => day.type !== 'workout' || (day.exercises ?? []).every((ex) => typeof ex.id === 'string' && ex.id.length > 0)
+      (day) =>
+        day.type !== 'workout' ||
+        (day.exercises ?? []).every(
+          (ex) => typeof ex.id === 'string' && ex.id.length > 0 && typeof ex.tempo === 'string' && ex.tempo.length > 0
+        )
     )
   );
 }
