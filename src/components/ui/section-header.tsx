@@ -10,10 +10,11 @@ export type SectionHeaderProps = {
   action?: string;
   onActionPress?: () => void;
   icon?: IconName;
+  iconLabel?: string;
   onIconPress?: () => void;
 };
 
-export function SectionHeader({ title, action, onActionPress, icon, onIconPress }: SectionHeaderProps) {
+export function SectionHeader({ title, action, onActionPress, icon, iconLabel, onIconPress }: SectionHeaderProps) {
   const theme = useTheme();
   return (
     <View style={styles.row}>
@@ -26,8 +27,15 @@ export function SectionHeader({ title, action, onActionPress, icon, onIconPress 
         </Pressable>
       ) : null}
       {icon ? (
-        <Pressable onPress={onIconPress} hitSlop={8} style={[styles.iconButton, { backgroundColor: theme.backgroundElement }]}>
-          <Icon name={icon} size={16} color={theme.text} />
+        <Pressable onPress={onIconPress} hitSlop={8} style={styles.iconGroup}>
+          {iconLabel ? (
+            <ThemedText type="caption" themeColor="textSecondary">
+              {iconLabel}
+            </ThemedText>
+          ) : null}
+          <View style={[styles.iconButton, { backgroundColor: theme.backgroundElement }]}>
+            <Icon name={icon} size={16} color={theme.text} />
+          </View>
         </Pressable>
       ) : null}
     </View>
@@ -40,6 +48,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.three,
+  },
+  iconGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   iconButton: {
     width: 30,

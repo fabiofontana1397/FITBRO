@@ -149,6 +149,7 @@ export default function TrainingScreen() {
               <SectionHeader
                 title={selectedDay.title}
                 icon="trendUp"
+                iconLabel="Carichi"
                 onIconPress={() => router.push('/training-progress')}
               />
               <View style={{ gap: Spacing.three }}>

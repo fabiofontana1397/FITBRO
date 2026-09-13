@@ -122,14 +122,17 @@ export function PlanExerciseRow({
               Aggiornato oggi: {loggedTodayKg}kg
             </ThemedText>
           ) : null}
-          <Pressable onPress={() => setLoadModalOpen(true)} style={[styles.newLoadButton, { backgroundColor: theme.accent }]}>
-            <Icon name="addCircle" size={13} color={theme.onAccent} />
-            <ThemedText type="caption" style={{ color: theme.onAccent, fontWeight: '700' }}>
-              Nuovo carico
-            </ThemedText>
-          </Pressable>
         </View>
       </View>
+
+      <Pressable
+        onPress={() => setLoadModalOpen(true)}
+        style={[styles.newLoadButton, { backgroundColor: theme.accent }]}>
+        <Icon name="addCircle" size={13} color={theme.onAccent} />
+        <ThemedText type="caption" style={{ color: theme.onAccent, fontWeight: '700' }}>
+          Nuovo carico
+        </ThemedText>
+      </Pressable>
 
       <ExerciseInfoModal
         visible={infoOpen}
@@ -241,6 +244,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'flex-end',
     gap: 4,
     paddingHorizontal: Spacing.two,
     paddingVertical: 6,
