@@ -1,14 +1,6 @@
 export type Sport = 'gym' | 'functional' | 'running' | 'swimming' | 'tennis' | 'cycling' | 'other';
 
-export type Goal =
-  | 'loseFat'
-  | 'gainMuscle'
-  | 'recomposition'
-  | 'maintainImprove'
-  | 'gainStrength'
-  | 'improveEndurance'
-  | 'sportEvent'
-  | 'generalHealth';
+export type Goal = 'loseFat' | 'gainMuscle' | 'maintainImprove' | 'gainStrength' | 'improveEndurance' | 'generalHealth';
 
 export type Sex = 'male' | 'female' | 'unspecified';
 

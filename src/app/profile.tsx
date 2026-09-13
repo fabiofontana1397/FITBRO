@@ -17,11 +17,9 @@ import { useUserStore } from '@/store/user-store';
 const GOAL_LABEL: Record<string, string> = {
   loseFat: 'Perdere grasso',
   gainMuscle: 'Aumentare massa muscolare',
-  recomposition: 'Ricomposizione corporea',
   maintainImprove: 'Mantenimento e forma fisica',
   gainStrength: 'Aumentare forza',
   improveEndurance: 'Migliorare resistenza',
-  sportEvent: 'Sport/evento',
   generalHealth: 'Salute generale',
 };
 

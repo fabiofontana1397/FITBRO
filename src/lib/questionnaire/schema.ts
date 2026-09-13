@@ -2,6 +2,10 @@ export type QuestionType = 'single' | 'multi' | 'scale' | 'number' | 'text' | 'l
 
 export type QuestionOption = { value: string; label: string };
 
+/** Shows this question only when another question's answer matches `equals`
+ * (array-includes for multi-select answers, strict equality otherwise). */
+export type QuestionDependency = { questionId: string; equals: string };
+
 export type Question = {
   id: string;
   type: QuestionType;
@@ -13,6 +17,7 @@ export type Question = {
   unit?: string;
   placeholder?: string;
   optional?: boolean;
+  dependsOn?: QuestionDependency;
 };
 
 export type OnboardingStep = {
@@ -22,6 +27,13 @@ export type OnboardingStep = {
   banner?: string;
   questions: Question[];
 };
+
+export function isQuestionVisible(question: Question, answers: Record<string, unknown>): boolean {
+  if (!question.dependsOn) return true;
+  const value = answers[question.dependsOn.questionId];
+  if (Array.isArray(value)) return value.includes(question.dependsOn.equals);
+  return value === question.dependsOn.equals;
+}
 
 /**
  * Options for question `activitiesPracticed`. Values are distinct (so
@@ -58,57 +70,86 @@ export const ACTIVITY_TO_SPORT: Record<string, 'gym' | 'functional' | 'running' 
   altro: 'other',
 };
 
+/**
+ * Activities the app can actually build a training program for. Every other
+ * selected activity is informational only — tracked for the calendar/weekly
+ * schedule, not turned into a generated program — so only these get a
+ * "what do you want to improve" follow-up (see buildActivityQuestions).
+ */
+export const TRAINABLE_ACTIVITIES = new Set(['gym', 'running']);
+
+const FREQUENCY_OPTIONS: QuestionOption[] = [
+  { value: '1', label: '1x a settimana' },
+  { value: '2', label: '2x a settimana' },
+  { value: '3', label: '3x a settimana' },
+  { value: '4', label: '4x a settimana' },
+  { value: '5', label: '5x a settimana' },
+  { value: '6+', label: '6+ a settimana' },
+];
+
+const FOCUS_OPTIONS_BY_ACTIVITY: Record<string, QuestionOption[]> = {
+  gym: [
+    { value: 'strength', label: 'Forza' },
+    { value: 'hypertrophy', label: 'Massa muscolare (ipertrofia)' },
+    { value: 'fatLoss', label: 'Definizione / dimagrimento' },
+    { value: 'muscularEndurance', label: 'Resistenza muscolare' },
+    { value: 'technique', label: 'Tecnica' },
+  ],
+  running: [
+    { value: 'endurance', label: 'Resistenza' },
+    { value: 'speed', label: 'Velocità' },
+    { value: 'raceTime', label: 'Migliorare i tempi' },
+    { value: 'fatLoss', label: 'Dimagrimento' },
+    { value: 'raceReady', label: 'Preparazione gara' },
+  ],
+};
+
+/**
+ * Builds the dynamic per-activity questions for the Training step: a
+ * frequency question for every selected activity, plus (for gym/running
+ * only — the two the app can generate a real program for) a "what do you
+ * want to improve" question with sport-specific options. Everything else
+ * (tennis, nuoto, ecc.) only gets the frequency question, purely so it can
+ * be placed on the weekly calendar.
+ */
+export function buildActivityQuestions(activities: string[]): Question[] {
+  const questions: Question[] = [];
+  for (const activity of activities) {
+    const label = ACTIVITY_OPTIONS.find((o) => o.value === activity)?.label ?? activity;
+    questions.push({
+      id: `freq_${activity}`,
+      type: 'single',
+      label: `Quante volte pratichi: ${label}?`,
+      options: FREQUENCY_OPTIONS,
+    });
+    const focusOptions = FOCUS_OPTIONS_BY_ACTIVITY[activity];
+    if (focusOptions) {
+      questions.push({
+        id: `focus_${activity}`,
+        type: 'single',
+        label: `Cosa vuoi migliorare con ${label}?`,
+        options: focusOptions,
+      });
+    }
+  }
+  return questions;
+}
+
+export type OnboardingMode = 'diet' | 'training' | 'both';
+
+const DIET_ONLY_STEP_IDS = new Set(['eatingHabits', 'preferences']);
+const TRAINING_ONLY_STEP_IDS = new Set(['training', 'availability', 'limitations']);
+
+/** Filters the full step list down to what a given diet/training/both choice should show. */
+export function stepsForMode(mode: OnboardingMode): OnboardingStep[] {
+  return ONBOARDING_STEPS.filter((step) => {
+    if (DIET_ONLY_STEP_IDS.has(step.id)) return mode !== 'training';
+    if (TRAINING_ONLY_STEP_IDS.has(step.id)) return mode !== 'diet';
+    return true;
+  });
+}
+
 export const ONBOARDING_STEPS: OnboardingStep[] = [
-  {
-    id: 'goal',
-    title: 'Obiettivo',
-    subtitle: 'Cosa vuoi ottenere con FITBRO?',
-    questions: [
-      {
-        id: 'goal',
-        type: 'single',
-        label: 'Qual è il tuo obiettivo principale?',
-        options: [
-          { value: 'loseFat', label: 'Perdere grasso' },
-          { value: 'gainMuscle', label: 'Aumentare massa muscolare' },
-          { value: 'recomposition', label: 'Ricomposizione corporea' },
-          { value: 'maintainImprove', label: 'Mantenere il peso e migliorare la forma fisica' },
-          { value: 'gainStrength', label: 'Aumentare forza' },
-          { value: 'improveEndurance', label: 'Migliorare resistenza' },
-          { value: 'sportEvent', label: 'Prepararmi per uno sport/evento' },
-          { value: 'generalHealth', label: 'Migliorare salute e benessere generale' },
-        ],
-      },
-      {
-        id: 'urgency',
-        type: 'scale',
-        label: 'Quanto è importante raggiungere questo obiettivo rapidamente?',
-        helper: '1 = nessuna fretta · 5 = il più rapidamente possibile',
-        min: 1,
-        max: 5,
-      },
-      {
-        id: 'hasDeadline',
-        type: 'single',
-        label: 'Hai una scadenza o un evento specifico?',
-        options: [
-          { value: 'no', label: 'No' },
-          { value: 'yes', label: 'Sì' },
-        ],
-      },
-      { id: 'deadlineDate', type: 'text', label: 'Se sì, data', placeholder: 'gg/mm/aaaa', optional: true },
-      { id: 'targetEvent', type: 'text', label: 'Se sì, evento', placeholder: 'es. maratona, gara, matrimonio…', optional: true },
-      { id: 'successWeightKg', type: 'number', label: 'Peso che consideri un successo', unit: 'kg', optional: true },
-      { id: 'successWaistCm', type: 'number', label: 'Girovita che consideri un successo', unit: 'cm', optional: true },
-      {
-        id: 'successOther',
-        type: 'text',
-        label: 'Altro (massa muscolare, performance, ecc.)',
-        placeholder: 'Descrivi il tuo traguardo',
-        optional: true,
-      },
-    ],
-  },
   {
     id: 'physical',
     title: 'Profilo fisico',
@@ -139,9 +180,43 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       { id: 'heightCm', type: 'number', label: 'Altezza', unit: 'cm' },
       { id: 'currentWeightKg', type: 'number', label: 'Peso attuale', unit: 'kg' },
       { id: 'targetWeightKg', type: 'number', label: 'Peso desiderato', unit: 'kg' },
-      { id: 'maxWeight12mo', type: 'number', label: 'Peso massimo raggiunto negli ultimi 12 mesi', unit: 'kg', optional: true },
-      { id: 'minWeight12mo', type: 'number', label: 'Peso minimo raggiunto negli ultimi 12 mesi', unit: 'kg', optional: true },
-      { id: 'bodyFatPct', type: 'number', label: 'Percentuale di massa grassa, se disponibile', unit: '%', optional: true },
+      { id: 'neckCm', type: 'number', label: 'Collo', unit: 'cm', optional: true },
+      { id: 'chestCm', type: 'number', label: 'Petto', unit: 'cm', optional: true },
+      { id: 'waistCm', type: 'number', label: 'Girovita', unit: 'cm', optional: true },
+      { id: 'hipsCm', type: 'number', label: 'Fianchi', unit: 'cm', optional: true },
+      { id: 'armCm', type: 'number', label: 'Braccia (bicipite)', unit: 'cm', optional: true },
+      { id: 'thighCm', type: 'number', label: 'Cosce', unit: 'cm', optional: true },
+    ],
+  },
+  {
+    id: 'goal',
+    title: 'Obiettivo',
+    subtitle: 'Cosa vuoi ottenere con FITBRO?',
+    questions: [
+      {
+        id: 'goal',
+        type: 'single',
+        label: 'Qual è il tuo obiettivo principale?',
+        options: [
+          { value: 'loseFat', label: 'Perdere grasso' },
+          { value: 'gainMuscle', label: 'Aumentare massa muscolare' },
+          { value: 'maintainImprove', label: 'Mantenere il peso e migliorare la forma fisica' },
+          { value: 'gainStrength', label: 'Aumentare forza' },
+          { value: 'improveEndurance', label: 'Migliorare resistenza' },
+          { value: 'generalHealth', label: 'Migliorare salute e benessere generale' },
+        ],
+      },
+      {
+        id: 'hasDeadline',
+        type: 'single',
+        label: 'Hai una scadenza o un evento specifico?',
+        options: [
+          { value: 'no', label: 'No' },
+          { value: 'yes', label: 'Sì' },
+        ],
+      },
+      { id: 'deadlineDate', type: 'text', label: 'Se sì, data', placeholder: 'gg/mm/aaaa', optional: true },
+      { id: 'successWeightKg', type: 'number', label: 'Peso che consideri un successo', unit: 'kg', optional: true },
     ],
   },
   {
@@ -186,7 +261,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         ],
       },
       { id: 'sleepQuality', type: 'scale', label: 'Come valuteresti la qualità del tuo sonno?', min: 1, max: 5 },
-      { id: 'stressLevel', type: 'scale', label: 'Quanto stress percepisci mediamente?', min: 1, max: 5 },
     ],
   },
   {
@@ -205,22 +279,33 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         ],
       },
       {
-        id: 'dietApproach',
-        type: 'single',
-        label: 'Quale approccio hai seguito?',
+        id: 'whatWorked',
+        type: 'multi',
+        label: 'Cosa ha funzionato meglio per te?',
+        optional: true,
         options: [
-          { value: 'caloriesMacros', label: 'Calorie/macronutrienti' },
-          { value: 'mediterranean', label: 'Dieta mediterranea' },
-          { value: 'lowCarb', label: 'Low carb' },
-          { value: 'keto', label: 'Keto' },
-          { value: 'intermittentFasting', label: 'Intermittent fasting' },
-          { value: 'vegetarian', label: 'Dieta vegetariana' },
+          { value: 'countingCalories', label: 'Contare calorie e macro' },
+          { value: 'fixedMeals', label: 'Pasti fissi, struttura precisa' },
+          { value: 'cuttingSugar', label: 'Eliminare zuccheri e snack' },
+          { value: 'moreProtein', label: 'Aumentare le proteine' },
           { value: 'other', label: 'Altro' },
         ],
-        optional: true,
       },
-      { id: 'whatWorked', type: 'longtext', label: 'Cosa ha funzionato meglio per te?', optional: true },
-      { id: 'whatDidntWork', type: 'longtext', label: 'Cosa NON ha funzionato?', optional: true },
+      { id: 'whatWorkedOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'whatWorked', equals: 'other' } },
+      {
+        id: 'whatDidntWork',
+        type: 'multi',
+        label: 'Cosa NON ha funzionato?',
+        optional: true,
+        options: [
+          { value: 'tooRestrictive', label: 'Troppo restrittivo' },
+          { value: 'hardEatingOut', label: 'Difficile da seguire fuori casa' },
+          { value: 'tooMuchHunger', label: 'Troppa fame' },
+          { value: 'lowEnergy', label: 'Poca energia/performance' },
+          { value: 'other', label: 'Altro' },
+        ],
+      },
+      { id: 'whatDidntWorkOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'whatDidntWork', equals: 'other' } },
       {
         id: 'dietStrictness',
         type: 'single',
@@ -235,7 +320,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         id: 'mealsPerDay',
         type: 'single',
-        label: 'Quanti pasti preferisci fare?',
+        label: 'Quanti pasti preferisci fare al giorno?',
         options: [
           { value: '2', label: '2' },
           { value: '3', label: '3' },
@@ -270,29 +355,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'daily', label: 'Quasi tutti i giorni' },
         ],
       },
-      {
-        id: 'cookingTime',
-        type: 'single',
-        label: 'Quanto tempo hai mediamente per cucinare?',
-        options: [
-          { value: 'lt10', label: '<10 min' },
-          { value: '10-20', label: '10–20 min' },
-          { value: '20-30', label: '20–30 min' },
-          { value: '30-60', label: '30–60 min' },
-          { value: 'gt60', label: '>60 min' },
-        ],
-      },
-      {
-        id: 'groceryBudget',
-        type: 'single',
-        label: 'Quanto vuoi spendere per la spesa alimentare?',
-        options: [
-          { value: 'low', label: 'Basso' },
-          { value: 'medium', label: 'Medio' },
-          { value: 'high', label: 'Alto' },
-          { value: 'noLimit', label: 'Nessun limite particolare' },
-        ],
-      },
     ],
   },
   {
@@ -313,6 +375,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'other', label: 'Altro' },
         ],
       },
+      { id: 'dietaryPatternOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'dietaryPattern', equals: 'other' } },
       { id: 'allergies', type: 'text', label: 'Hai allergie alimentari?', placeholder: 'No, oppure elenca quali', optional: true },
       { id: 'intolerances', type: 'text', label: 'Hai intolleranze o alimenti che digerisci male?', placeholder: 'No, oppure elenca quali', optional: true },
       { id: 'excludedFoods', type: 'longtext', label: 'Quali alimenti NON vuoi nella tua dieta?', optional: true },
@@ -335,6 +398,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'other', label: 'Altro' },
         ],
       },
+      { id: 'preferredProteinsOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'preferredProteins', equals: 'other' } },
       {
         id: 'preferredCarbs',
         type: 'multi',
@@ -351,6 +415,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'other', label: 'Altro' },
         ],
       },
+      { id: 'preferredCarbsOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'preferredCarbs', equals: 'other' } },
       {
         id: 'preferredFats',
         type: 'multi',
@@ -365,6 +430,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'other', label: 'Altro' },
         ],
       },
+      { id: 'preferredFatsOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'preferredFats', equals: 'other' } },
       {
         id: 'hungerLevel',
         type: 'single',
@@ -377,54 +443,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'constant', label: 'Quasi continuamente' },
         ],
       },
-      {
-        id: 'hungerTiming',
-        type: 'multi',
-        label: 'Quando senti più fame?',
-        options: [
-          { value: 'morning', label: 'Mattina' },
-          { value: 'lunch', label: 'Pranzo' },
-          { value: 'afternoon', label: 'Pomeriggio' },
-          { value: 'evening', label: 'Sera' },
-          { value: 'postWorkout', label: "Dopo l'allenamento" },
-        ],
-      },
       { id: 'cravings', type: 'scale', label: 'Hai spesso voglia di dolci/snack?', min: 1, max: 5 },
-      {
-        id: 'emotionalEating',
-        type: 'single',
-        label: 'Quanto ti capita di mangiare per fame emotiva/noia/stress?',
-        options: [
-          { value: 'never', label: 'Mai' },
-          { value: 'rarely', label: 'Raramente' },
-          { value: 'sometimes', label: 'A volte' },
-          { value: 'often', label: 'Spesso' },
-          { value: 'veryOften', label: 'Molto spesso' },
-        ],
-      },
-      {
-        id: 'cheatMeal',
-        type: 'single',
-        label: 'Quanto vuoi mantenere pasti liberi/cheat meal?',
-        options: [
-          { value: 'none', label: 'Nessuno' },
-          { value: 'oneWeek', label: '1 a settimana' },
-          { value: 'twoWeek', label: '2 a settimana' },
-          { value: 'free', label: 'Voglio poter mangiare liberamente occasionalmente' },
-        ],
-      },
-      {
-        id: 'waterIntake',
-        type: 'single',
-        label: 'Quanta acqua bevi mediamente?',
-        options: [
-          { value: 'lt1', label: '<1 L' },
-          { value: '1-1.5', label: '1–1,5 L' },
-          { value: '1.5-2', label: '1,5–2 L' },
-          { value: '2-3', label: '2–3 L' },
-          { value: 'gt3', label: '>3 L' },
-        ],
-      },
       {
         id: 'coffeeIntake',
         type: 'single',
@@ -465,102 +484,14 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'other', label: 'Altro' },
         ],
       },
+      { id: 'supplementsOther', type: 'text', label: 'Specifica', optional: true, dependsOn: { questionId: 'supplements', equals: 'other' } },
     ],
   },
   {
     id: 'training',
     title: 'Allenamento',
-    questions: [
-      {
-        id: 'currentlyTraining',
-        type: 'single',
-        label: 'Ti alleni attualmente?',
-        options: [
-          { value: 'no', label: 'No' },
-          { value: 'yes', label: 'Sì' },
-        ],
-      },
-      {
-        id: 'trainingSince',
-        type: 'single',
-        label: 'Da quanto tempo ti alleni?',
-        options: [
-          { value: 'never', label: 'Mai' },
-          { value: 'lt3m', label: '<3 mesi' },
-          { value: '3-12m', label: '3–12 mesi' },
-          { value: '1-3y', label: '1–3 anni' },
-          { value: 'gt3y', label: '>3 anni' },
-        ],
-      },
-      { id: 'activitiesPracticed', type: 'multi', label: 'Quali attività pratichi?', options: ACTIVITY_OPTIONS },
-      {
-        id: 'currentFrequency',
-        type: 'single',
-        label: 'Quante volte ti alleni attualmente?',
-        options: [
-          { value: '0', label: '0' },
-          { value: '1', label: '1' },
-          { value: '2', label: '2' },
-          { value: '3', label: '3' },
-          { value: '4', label: '4' },
-          { value: '5', label: '5' },
-          { value: '6+', label: '6+' },
-          { value: 'variable', label: 'Variabile' },
-        ],
-      },
-      {
-        id: 'trainingStyle',
-        type: 'single',
-        label: 'Quale tipo di allenamento preferisci?',
-        options: [
-          { value: 'weights', label: 'Pesi' },
-          { value: 'cardio', label: 'Cardio' },
-          { value: 'hiit', label: 'HIIT' },
-          { value: 'circuit', label: 'Circuit training' },
-          { value: 'bodyweight', label: 'Corpo libero' },
-          { value: 'sport', label: 'Sport' },
-          { value: 'mix', label: 'Mix' },
-        ],
-      },
-      { id: 'likedExercises', type: 'longtext', label: 'Quali esercizi/attività ti piacciono?', optional: true },
-      { id: 'dislikedExercises', type: 'longtext', label: 'Quali esercizi/attività NON ti piacciono?', optional: true },
-      { id: 'trainingIntensity', type: 'scale', label: "Quanto vuoi che l'allenamento sia impegnativo?", min: 1, max: 5 },
-      {
-        id: 'sessionStyle',
-        type: 'single',
-        label: 'Preferisci:',
-        options: [
-          { value: 'shortIntense', label: 'Allenamenti brevi e intensi' },
-          { value: 'longModerate', label: 'Allenamenti più lunghi e moderati' },
-          { value: 'mix', label: 'Un mix' },
-        ],
-      },
-      { id: 'squatKg', type: 'number', label: 'Squat', unit: 'kg', optional: true },
-      { id: 'squatReps', type: 'number', label: 'Squat — ripetizioni', unit: 'reps', optional: true },
-      { id: 'benchKg', type: 'number', label: 'Panca', unit: 'kg', optional: true },
-      { id: 'benchReps', type: 'number', label: 'Panca — ripetizioni', unit: 'reps', optional: true },
-      { id: 'deadliftKg', type: 'number', label: 'Stacco', unit: 'kg', optional: true },
-      { id: 'deadliftReps', type: 'number', label: 'Stacco — ripetizioni', unit: 'reps', optional: true },
-      { id: 'pullupsReps', type: 'number', label: 'Trazioni', unit: 'reps', optional: true },
-      { id: 'runDistanceKm', type: 'number', label: 'Corsa — distanza abituale', unit: 'km', optional: true },
-      { id: 'runTime', type: 'text', label: 'Corsa — tempo medio', placeholder: 'es. 50 min', optional: true },
-      { id: 'runFrequency', type: 'text', label: 'Corsa — frequenza settimanale', placeholder: 'es. 3 volte', optional: true },
-      {
-        id: 'focusArea',
-        type: 'single',
-        label: 'Quale aspetto vuoi migliorare maggiormente?',
-        options: [
-          { value: 'strength', label: 'Forza' },
-          { value: 'muscle', label: 'Massa muscolare' },
-          { value: 'endurance', label: 'Resistenza' },
-          { value: 'speed', label: 'Velocità' },
-          { value: 'mobility', label: 'Mobilità' },
-          { value: 'technique', label: 'Tecnica' },
-          { value: 'sportPerformance', label: 'Performance sportiva' },
-          { value: 'aesthetics', label: 'Estetica' },
-        ],
-      },
-    ],
+    subtitle: 'Programmi veri e propri li costruiamo solo per sala pesi e corsa: tutto il resto lo teniamo comunque in agenda.',
+    questions: [{ id: 'activitiesPracticed', type: 'multi', label: 'Quali attività pratichi?', options: ACTIVITY_OPTIONS }],
   },
   {
     id: 'availability',
@@ -606,7 +537,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         id: 'equipment',
         type: 'multi',
-        label: 'Quale attrezzatura hai?',
+        label: 'Quale attrezzatura hai a casa?',
+        dependsOn: { questionId: 'trainingLocation', equals: 'home' },
         options: [
           { value: 'none', label: 'Nessuna' },
           { value: 'dumbbells', label: 'Manubri' },
@@ -659,116 +591,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         ],
       },
       { id: 'recentInjuriesDetails', type: 'longtext', label: 'Se sì, quali', optional: true },
-    ],
-  },
-  {
-    id: 'monitoring',
-    title: 'Monitoraggio',
-    questions: [
-      {
-        id: 'planFlexibility',
-        type: 'single',
-        label: 'Quanto vuoi che il piano sia flessibile?',
-        options: [
-          { value: 'exact', label: 'Voglio seguire esattamente il piano' },
-          { value: 'swapFood', label: 'Voglio poter sostituire gli alimenti' },
-          { value: 'swapWorkouts', label: 'Voglio poter sostituire gli allenamenti' },
-          { value: 'fullFlexibility', label: 'Voglio completa flessibilità' },
-        ],
-      },
-      {
-        id: 'planDelivery',
-        type: 'single',
-        label: 'Preferisci ricevere:',
-        options: [
-          { value: 'exactMenu', label: 'Un menu preciso giorno per giorno' },
-          { value: 'structureWithAlternatives', label: 'Una struttura alimentare con alternative' },
-          { value: 'targetsOnly', label: 'Obiettivi calorici e macro da gestire autonomamente' },
-          { value: 'mix', label: 'Un mix' },
-        ],
-      },
-      {
-        id: 'autoAdapt',
-        type: 'single',
-        label: "Vuoi che l'app adatti automaticamente il piano in base ai tuoi progressi?",
-        options: [
-          { value: 'yes', label: 'Sì' },
-          { value: 'no', label: 'No' },
-        ],
-      },
-      {
-        id: 'reviewFrequency',
-        type: 'single',
-        label: 'Ogni quanto vuoi essere valutato?',
-        options: [
-          { value: 'daily', label: 'Ogni giorno' },
-          { value: 'weekly', label: 'Ogni settimana' },
-          { value: 'biweekly', label: 'Ogni 2 settimane' },
-          { value: 'monthly', label: 'Ogni mese' },
-        ],
-      },
-      {
-        id: 'weighInFrequency',
-        type: 'single',
-        label: 'Sei disposto a pesarti regolarmente?',
-        options: [
-          { value: 'daily', label: 'Ogni giorno' },
-          { value: '2-3week', label: '2–3 volte/settimana' },
-          { value: 'weekly', label: '1 volta/settimana' },
-          { value: 'lessOften', label: 'Meno frequentemente' },
-        ],
-      },
-      {
-        id: 'measureWaist',
-        type: 'single',
-        label: 'Sei disposto a misurare il girovita?',
-        options: [
-          { value: 'yes', label: 'Sì' },
-          { value: 'no', label: 'No' },
-        ],
-      },
-      {
-        id: 'uploadPhotos',
-        type: 'single',
-        label: 'Vuoi caricare foto dei progressi?',
-        options: [
-          { value: 'yes', label: 'Sì' },
-          { value: 'no', label: 'No' },
-        ],
-      },
-      {
-        id: 'wearables',
-        type: 'multi',
-        label: 'Vuoi collegare dispositivi/app per importare automaticamente i dati?',
-        options: [
-          { value: 'appleHealth', label: 'Apple Health' },
-          { value: 'googleHealthConnect', label: 'Google Health Connect' },
-          { value: 'garmin', label: 'Garmin' },
-          { value: 'fitbit', label: 'Fitbit' },
-          { value: 'oura', label: 'Oura' },
-          { value: 'other', label: 'Altri' },
-          { value: 'none', label: 'Nessuno' },
-        ],
-      },
-      {
-        id: 'mainObstacle',
-        type: 'single',
-        label: 'Qual è la difficoltà principale che incontri nel raggiungere i tuoi obiettivi?',
-        options: [
-          { value: 'consistency', label: 'Costanza' },
-          { value: 'hunger', label: 'Fame' },
-          { value: 'timeShortage', label: 'Mancanza di tempo' },
-          { value: 'motivation', label: 'Motivazione' },
-          { value: 'organization', label: 'Organizzazione' },
-          { value: 'eatingOut', label: 'Alimentazione fuori casa' },
-          { value: 'training', label: 'Allenamento' },
-          { value: 'recoverySleep', label: 'Recupero/sonno' },
-          { value: 'dontKnow', label: 'Non so cosa fare' },
-          { value: 'other', label: 'Altro' },
-        ],
-      },
-      { id: 'motivationLevel', type: 'scale', label: 'Quanto sei motivato a raggiungere il tuo obiettivo?', min: 1, max: 10 },
-      { id: 'expectations', type: 'longtext', label: "Cosa ti aspetti dall'app?", optional: true },
     ],
   },
 ];
