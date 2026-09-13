@@ -6,7 +6,6 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
-import { ChatFab } from '@/components/chat/chat-fab';
 import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { SpringSnappy } from '@/constants/motion';
@@ -51,7 +50,11 @@ function FloatingTabBar({ children }: { children?: React.ReactNode }) {
         <GlassSurface level="raised" radius={Radius.xlarge} style={styles.bar}>
           <View style={styles.barRow}>{children}</View>
         </GlassSurface>
-        <ChatFab />
+        {/* Reserves the room ChatFab occupies (see _layout.tsx) — the FAB
+            itself is a fully independent overlay painted on top of this gap,
+            not a sibling here, so tapping it can't be misrouted by TabList's
+            own tap-resolution (see chat-fab.tsx for why that matters). */}
+        <View style={styles.fabSpacer} />
       </View>
     </View>
   );
@@ -98,12 +101,14 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
     width: '100%',
     maxWidth: MaxContentWidth,
   },
   bar: {
     flex: 1,
+  },
+  fabSpacer: {
+    width: 56,
   },
   barRow: {
     flexDirection: 'row',
