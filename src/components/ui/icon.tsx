@@ -69,6 +69,7 @@ const ICONS = {
   chevronUp: { set: 'ion', name: 'chevron-up' },
   download: { set: 'ion', name: 'download-outline' },
   refresh: { set: 'ion', name: 'refresh-outline' },
+  lock: { set: 'ion', name: 'lock-closed-outline' },
 } as const satisfies Record<string, { set: 'mci' | 'ion'; name: MCIName | IonName }>;
 
 export type IconName = keyof typeof ICONS;

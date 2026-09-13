@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { PlanTimeline } from '@/components/training/plan-timeline';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { getExerciseMedia } from '@/lib/exercise-media/exercise-media';
 import { exportTrainingPlanPdf, type TrainingPlanPdfRow } from '@/lib/planning/pdf-export';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
@@ -18,76 +18,83 @@ import { usePlanStore } from '@/store/plan-store';
 import { latestWeightForExercise, useTrainingProgressStore } from '@/store/training-progress-store';
 import { useUserStore } from '@/store/user-store';
 
-const PHASE_LABEL: Record<string, string> = {
-  adattamento: 'Adattamento',
-  progressione: 'Progressione',
-  consolidamento: 'Consolidamento',
-};
-
-type Row = TrainingPlanPdfRow & { key: string; note?: string };
+type DayItem = { key: string; exerciseId?: string; name: string; subtitle: string; carico: string | null };
+type DayGroup = { weekday: string; title: string; icon: 'gym' | 'running'; items: DayItem[] };
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
   const plan = usePlanStore((s) => s.trainingPlan);
-  const generatePlans = usePlanStore((s) => s.generatePlans);
   const answers = useOnboardingStore((s) => s.answers);
   const currentUser = useUserStore();
   const progressSets = useTrainingProgressStore((s) => s.sets);
   const [exporting, setExporting] = useState(false);
 
-  const monthIndex = plan ? currentMonthIndex(plan) : 1;
-  const currentMonth = plan?.months.find((m) => m.monthIndex === monthIndex);
+  const currentMonthIdx = plan ? currentMonthIndex(plan) : 1;
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthIdx);
+  const selectedMonthData = plan?.months.find((m) => m.monthIndex === selectedMonth);
+  const isUnlocked = selectedMonth <= currentMonthIdx;
 
-  const rows: Row[] = useMemo(() => {
-    if (!currentMonth) return [];
-    return currentMonth.weeklySplit.flatMap((day): Row[] => {
-      if (day.type === 'workout') {
-        return (day.exercises ?? []).map((ex) => {
-          const logged = latestWeightForExercise(progressSets, ex.id);
-          const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : '—';
+  const dayGroups: DayGroup[] = useMemo(() => {
+    if (!selectedMonthData) return [];
+    return selectedMonthData.weeklySplit
+      .filter((day) => day.type !== 'rest')
+      .map((day): DayGroup => {
+        if (day.type === 'workout') {
           return {
-            key: `${day.weekday}-${ex.id}`,
             weekday: day.weekday,
-            dayTitle: day.title,
-            name: ex.name,
-            sets: ex.sets,
-            reps: ex.reps,
-            rest: ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`,
-            carico,
+            title: day.title,
+            icon: 'gym',
+            items: (day.exercises ?? []).map((ex) => {
+              const logged = latestWeightForExercise(progressSets, ex.id);
+              const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : null;
+              const rest = ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`;
+              return { key: ex.id, exerciseId: ex.id, name: ex.name, subtitle: `${ex.sets}×${ex.reps} · recupero ${rest}`, carico };
+            }),
           };
-        });
-      }
-      if (day.type === 'cardio') {
-        return [
-          {
-            key: day.weekday,
-            weekday: day.weekday,
-            dayTitle: day.title,
-            name: day.note ?? 'Corsa',
-            sets: null,
-            reps: null,
-            rest: null,
-            carico: null,
-          },
-        ];
-      }
-      return [];
-    });
-  }, [currentMonth, progressSets]);
+        }
+        return {
+          weekday: day.weekday,
+          title: day.title,
+          icon: 'running',
+          items: [{ key: day.weekday, name: day.title, subtitle: day.note ?? '', carico: null }],
+        };
+      });
+  }, [selectedMonthData, progressSets]);
 
   const goalLabel = labelFor(findQuestion('goal'), answers.goal) ?? '';
 
   const handleExport = async () => {
-    if (!plan || !currentMonth) return;
+    if (!plan || !selectedMonthData) return;
     setExporting(true);
     try {
+      const rows: TrainingPlanPdfRow[] = selectedMonthData.weeklySplit.flatMap((day): TrainingPlanPdfRow[] => {
+        if (day.type === 'workout') {
+          return (day.exercises ?? []).map((ex) => {
+            const logged = latestWeightForExercise(progressSets, ex.id);
+            const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : null;
+            return {
+              weekday: day.weekday,
+              dayTitle: day.title,
+              name: ex.name,
+              sets: ex.sets,
+              reps: ex.reps,
+              rest: ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`,
+              carico,
+            };
+          });
+        }
+        if (day.type === 'cardio') {
+          return [{ weekday: day.weekday, dayTitle: day.title, name: day.note ?? 'Corsa', sets: null, reps: null, rest: null, carico: null }];
+        }
+        return [];
+      });
       await exportTrainingPlanPdf({
         userName: currentUser.name,
         goalNote: `Obiettivo: ${goalLabel}`,
         totalMonths: plan.durationMonths,
-        monthIndex,
-        monthTitle: currentMonth.title,
-        monthFocus: currentMonth.focusNote,
+        monthIndex: selectedMonth,
+        monthTitle: selectedMonthData.title,
+        monthFocus: selectedMonthData.focusNote,
         rows,
       });
     } catch {
@@ -95,10 +102,6 @@ export default function TrainingPlanScreen() {
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleRegenerate = () => {
-    generatePlans(answers, { dailyCalorieTarget: currentUser.dailyCalorieTarget, macroTargetsG: currentUser.macroTargetsG });
   };
 
   return (
@@ -116,7 +119,7 @@ export default function TrainingPlanScreen() {
         </Pressable>
       </View>
 
-      {!plan || !currentMonth ? (
+      {!plan ? (
         <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.two }}>
           <ThemedText type="smallBold">Nessun programma generato</ThemedText>
           <ThemedText type="caption" themeColor="textSecondary">
@@ -126,89 +129,114 @@ export default function TrainingPlanScreen() {
         </GlassSurface>
       ) : (
         <>
-          <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four }}>
-            <PlanTimeline
-              totalMonths={plan.durationMonths}
-              currentMonth={monthIndex}
-              currentLabel={`Mese ${monthIndex} · ${PHASE_LABEL[currentMonth.phase]}`}
-            />
-          </GlassSurface>
-
-          <View style={styles.actionsRow}>
-            <PrimaryButton
-              label={exporting ? 'Preparazione…' : 'Scarica PDF'}
-              icon="download"
-              onPress={handleExport}
-              disabled={exporting}
-              style={{ flex: 1 }}
-            />
-            <PrimaryButton variant="ghost" label="Rigenera" icon="refresh" onPress={handleRegenerate} style={{ flex: 1 }} />
+          <View style={styles.planMetaRow}>
+            <View style={{ gap: 2 }}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Durata piano totale
+              </ThemedText>
+              <ThemedText type="smallBold">{plan.durationMonths} mesi</ThemedText>
+            </View>
+            <View style={{ gap: 2 }}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Durata scheda
+              </ThemedText>
+              <ThemedText type="smallBold">1 mese</ThemedText>
+            </View>
           </View>
 
-          <View style={{ gap: Spacing.one }}>
-            <ThemedText type="subtitle">{currentMonth.title}</ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              {currentMonth.focusNote}
-            </ThemedText>
-          </View>
+          <PlanTimeline
+            totalMonths={plan.durationMonths}
+            currentMonth={currentMonthIdx}
+            selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+          />
 
-          <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three }}>
-            <View style={styles.tableHeaderRow}>
-              <ThemedText type="label" themeColor="textSecondary" style={styles.colExercise}>
-                Esercizio
-              </ThemedText>
-              <ThemedText type="label" themeColor="textSecondary" style={styles.colSmall}>
-                Serie
-              </ThemedText>
-              <ThemedText type="label" themeColor="textSecondary" style={styles.colSmall}>
-                Rip
-              </ThemedText>
-              <ThemedText type="label" themeColor="textSecondary" style={styles.colMedium}>
-                Recupero
-              </ThemedText>
-              <ThemedText type="label" themeColor="textSecondary" style={styles.colMedium}>
-                Carico
+          {selectedMonthData ? (
+            <View style={{ gap: Spacing.one }}>
+              <ThemedText type="subtitle">{selectedMonthData.title}</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {selectedMonthData.focusNote}
               </ThemedText>
             </View>
-            {rows.map((row, i) => {
-              const showDay = i === 0 || rows[i - 1].weekday !== row.weekday;
-              return (
-                <View key={row.key}>
-                  {showDay ? (
-                    <View style={[styles.dayHeadingRow, { backgroundColor: theme.backgroundElement }]}>
-                      <ThemedText type="caption" style={{ fontWeight: '700' }}>
-                        {row.weekday} · {row.dayTitle}
+          ) : null}
+
+          {!isUnlocked ? (
+            <GlassSurface level="card" radius={Radius.large} style={styles.lockedCard}>
+              <View style={[styles.lockedIcon, { backgroundColor: theme.backgroundElement }]}>
+                <Icon name="lock" size={22} color={theme.textTertiary} />
+              </View>
+              <ThemedText type="smallBold">Scheda ancora da sbloccare</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                Si sblocca al termine del Mese {selectedMonth - 1}. I dettagli si adatteranno ai tuoi progressi fino a
+                quel momento.
+              </ThemedText>
+            </GlassSurface>
+          ) : (
+            <>
+              <Pressable onPress={handleExport} disabled={exporting} style={styles.exportLink} hitSlop={8}>
+                <Icon name="download" size={15} color={theme.textSecondary} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {exporting ? 'Preparazione…' : 'Scarica PDF'}
+                </ThemedText>
+              </Pressable>
+
+              <View style={{ gap: Spacing.four }}>
+                {dayGroups.map((group) => (
+                  <View key={group.weekday} style={{ gap: Spacing.two }}>
+                    <View style={styles.dayHeadingRow}>
+                      <Icon name={group.icon} size={14} color={theme.textSecondary} />
+                      <ThemedText type="label" themeColor="textSecondary">
+                        {group.weekday} · {group.title}
                       </ThemedText>
                     </View>
-                  ) : null}
-                  <View style={[styles.tableRow, { borderTopColor: theme.border }]}>
-                    <ThemedText type="small" style={styles.colExercise}>
-                      {row.name}
-                    </ThemedText>
-                    <ThemedText type="small" style={styles.colSmall}>
-                      {row.sets ?? '—'}
-                    </ThemedText>
-                    <ThemedText type="small" style={styles.colSmall}>
-                      {row.reps ?? '—'}
-                    </ThemedText>
-                    <ThemedText type="small" style={styles.colMedium}>
-                      {row.rest ?? '—'}
-                    </ThemedText>
-                    <ThemedText type="small" style={[styles.colMedium, { color: theme.accent, fontWeight: '700' }]}>
-                      {row.carico ?? '—'}
-                    </ThemedText>
+                    <View style={{ gap: Spacing.two }}>
+                      {group.items.map((item) => (
+                        <ExerciseSummaryCard key={item.key} item={item} />
+                      ))}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </GlassSurface>
+                ))}
+              </View>
 
-          <ThemedText type="caption" themeColor="textTertiary">
-            ~ = carico consigliato per iniziare. Registra le tue serie per sostituirlo con il carico reale.
-          </ThemedText>
+              <ThemedText type="caption" themeColor="textTertiary">
+                ~ = carico consigliato per iniziare. Registra le tue serie nel piano per sostituirlo con il carico
+                reale.
+              </ThemedText>
+            </>
+          )}
         </>
       )}
     </ScreenScroll>
+  );
+}
+
+function ExerciseSummaryCard({ item }: { item: DayItem }) {
+  const theme = useTheme();
+  const media = item.exerciseId ? getExerciseMedia(item.exerciseId) : undefined;
+
+  return (
+    <GlassSurface level="card" radius={Radius.large} style={styles.exerciseCard}>
+      {media ? (
+        <Image source={{ uri: media.gifUrl }} style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
+      ) : (
+        <View style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <ThemedText type="smallBold">{item.name}</ThemedText>
+        {item.subtitle ? (
+          <ThemedText type="caption" themeColor="textSecondary">
+            {item.subtitle}
+          </ThemedText>
+        ) : null}
+      </View>
+      {item.carico ? (
+        <View style={[styles.caricoBadge, { backgroundColor: theme.accentSoft }]}>
+          <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
+            {item.carico}
+          </ThemedText>
+        </View>
+      ) : null}
+    </GlassSurface>
   );
 }
 
@@ -227,31 +255,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionsRow: {
+  planMetaRow: {
     flexDirection: 'row',
-    gap: Spacing.three,
+    gap: Spacing.five,
   },
-  tableHeaderRow: {
+  exportLink: {
     flexDirection: 'row',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingBottom: Spacing.two,
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 6,
   },
   dayHeadingRow: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.small,
-    marginTop: Spacing.two,
-  },
-  tableRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
+    gap: 6,
   },
-  colExercise: { flex: 1, paddingRight: 4 },
-  colSmall: { width: 38 },
-  colMedium: { width: 72 },
+  exerciseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.medium,
+  },
+  caricoBadge: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  lockedCard: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.five,
+  },
+  lockedIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

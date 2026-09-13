@@ -1,80 +1,65 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Icon } from '@/components/ui/icon';
+import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type PlanTimelineProps = {
   totalMonths: number;
+  /** The month unlocked so far by real elapsed time — months beyond this are locked. */
   currentMonth: number;
-  currentLabel: string;
+  selectedMonth: number;
+  onSelectMonth: (month: number) => void;
 };
 
-/** Total/current-scheda summary + a month-by-month chip row — future months stay
- * greyed out and unlock one at a time as the current month advances. */
-export function PlanTimeline({ totalMonths, currentMonth, currentLabel }: PlanTimelineProps) {
+/** A month-by-month chip bar. Unlocked months (<= currentMonth) can be opened in
+ * full; later ones stay greyed out and locked until the plan reaches them. */
+export function PlanTimeline({ totalMonths, currentMonth, selectedMonth, onSelectMonth }: PlanTimelineProps) {
   const theme = useTheme();
 
   return (
-    <View style={{ gap: Spacing.three }}>
-      <View style={styles.metaRow}>
-        <MetaItem label="Durata piano totale" value={`${totalMonths} mesi`} />
-        <MetaItem label="Durata scheda" value="1 mese" />
-      </View>
-      <View style={{ gap: 2 }}>
-        <ThemedText type="caption" themeColor="textSecondary">
-          Scheda attuale
-        </ThemedText>
-        <ThemedText type="smallBold">{currentLabel}</ThemedText>
-      </View>
-      <View style={styles.chipsRow}>
-        {Array.from({ length: totalMonths }, (_, i) => i + 1).map((month) => {
-          const isCurrent = month === currentMonth;
-          const isPast = month < currentMonth;
-          return (
+    <View style={styles.chipsRow}>
+      {Array.from({ length: totalMonths }, (_, i) => i + 1).map((month) => {
+        const isUnlocked = month <= currentMonth;
+        const isSelected = month === selectedMonth;
+        return (
+          <Pressable key={month} onPress={() => onSelectMonth(month)} style={styles.chipWrap}>
             <View
-              key={month}
               style={[
                 styles.chip,
-                { backgroundColor: isCurrent ? theme.accent : theme.backgroundElement, opacity: isPast ? 0.7 : 1 },
+                { backgroundColor: isSelected ? theme.accent : theme.backgroundElement },
+                !isSelected && { borderWidth: 1.5, borderColor: isUnlocked ? theme.accent : 'transparent' },
               ]}>
-              <ThemedText
-                type="caption"
-                style={{ color: isCurrent ? theme.onAccent : theme.textTertiary, fontWeight: '700' }}>
-                {month}
-              </ThemedText>
+              {isUnlocked ? (
+                <ThemedText
+                  type="caption"
+                  style={{ color: isSelected ? theme.onAccent : theme.text, fontWeight: '700' }}>
+                  {month}
+                </ThemedText>
+              ) : (
+                <Icon name="lock" size={13} color={isSelected ? theme.onAccent : theme.textTertiary} />
+              )}
             </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function MetaItem({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ gap: 2 }}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="smallBold">{value}</ThemedText>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  metaRow: {
-    flexDirection: 'row',
-    gap: Spacing.five,
-  },
   chipsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     flexWrap: 'wrap',
   },
+  chipWrap: {
+    padding: 2,
+  },
   chip: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

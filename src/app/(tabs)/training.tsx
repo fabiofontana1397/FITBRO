@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { ScreenHeader } from '@/components/screen-header';
@@ -14,7 +14,7 @@ import { PlanTimeline } from '@/components/training/plan-timeline';
 import { WeekStrip, type WeekStripDayType } from '@/components/training/week-strip';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
+import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingDayPlan } from '@/lib/planning/types';
 import { useOnboardingStore } from '@/store/onboarding-store';
@@ -43,8 +43,15 @@ export default function TrainingScreen() {
   const logSet = useTrainingProgressStore((s) => s.logSet);
   const removeSet = useTrainingProgressStore((s) => s.removeSet);
 
-  const weekDates = useMemo(() => currentWeekDates(), []);
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
+  const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
+  const monthYearLabel = useMemo(() => {
+    const label = new Date(weekDates[0]).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, [weekDates]);
+
+  const goToPrevWeek = () => setSelectedDate((d) => addDaysISO(d, -7));
+  const goToNextWeek = () => setSelectedDate((d) => addDaysISO(d, 7));
 
   useEffect(() => {
     if (trainingPlan || onboardingAnswers.mode === 'diet') return;
@@ -78,10 +85,27 @@ export default function TrainingScreen() {
           <View>
             <SectionHeader title="Il tuo piano" />
             <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.three }}>
+              <View style={styles.planMetaRow}>
+                <View style={{ gap: 2 }}>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    Durata piano totale
+                  </ThemedText>
+                  <ThemedText type="smallBold">{trainingPlan.durationMonths} mesi</ThemedText>
+                </View>
+                <View style={{ gap: 2 }}>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    Scheda attuale
+                  </ThemedText>
+                  <ThemedText type="smallBold">
+                    Mese {monthIndex} · {PHASE_LABEL[currentMonth?.phase ?? 'adattamento']}
+                  </ThemedText>
+                </View>
+              </View>
               <PlanTimeline
                 totalMonths={trainingPlan.durationMonths}
                 currentMonth={monthIndex}
-                currentLabel={`Mese ${monthIndex} · ${PHASE_LABEL[currentMonth?.phase ?? 'adattamento']}`}
+                selectedMonth={monthIndex}
+                onSelectMonth={() => router.push('/training-plan')}
               />
               <PrimaryButton
                 variant="ghost"
@@ -94,6 +118,15 @@ export default function TrainingScreen() {
 
           <View style={{ gap: Spacing.three }}>
             <SectionHeader title="Calendario" />
+            <View style={styles.monthNavRow}>
+              <Pressable onPress={goToPrevWeek} hitSlop={10} style={styles.navArrow}>
+                <Icon name="arrowBack" size={18} color={theme.textSecondary} />
+              </Pressable>
+              <ThemedText type="smallBold">{monthYearLabel}</ThemedText>
+              <Pressable onPress={goToNextWeek} hitSlop={10} style={styles.navArrow}>
+                <Icon name="chevronRight" size={18} color={theme.textSecondary} />
+              </Pressable>
+            </View>
             <WeekStrip dates={weekDates} dayTypes={dayTypes} selectedDate={selectedDate} onSelect={setSelectedDate} />
           </View>
 
@@ -101,9 +134,9 @@ export default function TrainingScreen() {
             <View>
               <SectionHeader title={selectedDay.title} />
               <View style={{ gap: Spacing.three }}>
-                {(selectedDay.exercises ?? []).map((exercise, exerciseIndex) => (
+                {(selectedDay.exercises ?? []).map((exercise) => (
                   <PlanExerciseRow
-                    key={`${exercise.id}-${exerciseIndex}`}
+                    key={exercise.id}
                     exercise={exercise}
                     setsToday={setsForExerciseOnDate(progressSets, exercise.id, selectedDate)}
                     history={historyForExercise(progressSets, exercise.id)}
@@ -142,6 +175,19 @@ export default function TrainingScreen() {
 }
 
 const styles = StyleSheet.create({
+  planMetaRow: {
+    flexDirection: 'row',
+    gap: Spacing.five,
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.four,
+  },
+  navArrow: {
+    padding: Spacing.one,
+  },
   dayCard: {
     alignItems: 'center',
     gap: Spacing.two,
