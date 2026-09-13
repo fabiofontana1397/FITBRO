@@ -114,7 +114,7 @@ export function PlanExerciseRow({
             <ThemedText type="caption" themeColor="textTertiary" style={styles.chartHint}>
               {isBodyweight
                 ? 'Aggiungi un carico se appesantisci l’esercizio.'
-                : `Consigliato: ${exercise.suggestedKg}kg`}
+                : 'Aggiungi un carico per iniziare a monitorare i progressi.'}
             </ThemedText>
           )}
           {loggedTodayKg != null ? (

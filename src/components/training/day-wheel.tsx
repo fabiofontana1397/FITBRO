@@ -90,9 +90,18 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
 
   const handleSettle = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      commitIndex(Math.round(event.nativeEvent.contentOffset.x / ITEM_WIDTH));
+      const index = Math.min(
+        Math.max(Math.round(event.nativeEvent.contentOffset.x / ITEM_WIDTH), 0),
+        dates.length - 1
+      );
+      // `snapToInterval` isn't reliably honored on every platform (notably
+      // web), so momentum can end at an offset sitting between two days —
+      // always correct it to the nearest item's exact position rather than
+      // leaving the wheel resting between two numbers.
+      scrollTo(scrollRef, index * ITEM_WIDTH, 0, true);
+      commitIndex(index);
     },
-    [commitIndex]
+    [commitIndex, dates.length, scrollRef]
   );
 
   useEffect(() => {
