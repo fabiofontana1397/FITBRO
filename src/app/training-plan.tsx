@@ -1,25 +1,30 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { PlanTimeline } from '@/components/training/plan-timeline';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { exportTrainingPlanPdf } from '@/lib/planning/pdf-export';
-import type { PlanPhaseKind, TrainingDayPlan, TrainingMonthPlan } from '@/lib/planning/types';
+import { exportTrainingPlanPdf, type TrainingPlanPdfRow } from '@/lib/planning/pdf-export';
+import { currentMonthIndex } from '@/lib/planning/plan-progress';
+import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
+import { latestWeightForExercise, useTrainingProgressStore } from '@/store/training-progress-store';
 import { useUserStore } from '@/store/user-store';
 
-const PHASE_LABEL: Record<PlanPhaseKind, string> = {
+const PHASE_LABEL: Record<string, string> = {
   adattamento: 'Adattamento',
   progressione: 'Progressione',
   consolidamento: 'Consolidamento',
 };
+
+type Row = TrainingPlanPdfRow & { key: string; note?: string };
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
@@ -27,14 +32,64 @@ export default function TrainingPlanScreen() {
   const generatePlans = usePlanStore((s) => s.generatePlans);
   const answers = useOnboardingStore((s) => s.answers);
   const currentUser = useUserStore();
-  const [expandedMonth, setExpandedMonth] = useState(1);
+  const progressSets = useTrainingProgressStore((s) => s.sets);
   const [exporting, setExporting] = useState(false);
 
+  const monthIndex = plan ? currentMonthIndex(plan) : 1;
+  const currentMonth = plan?.months.find((m) => m.monthIndex === monthIndex);
+
+  const rows: Row[] = useMemo(() => {
+    if (!currentMonth) return [];
+    return currentMonth.weeklySplit.flatMap((day): Row[] => {
+      if (day.type === 'workout') {
+        return (day.exercises ?? []).map((ex) => {
+          const logged = latestWeightForExercise(progressSets, ex.id);
+          const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : '—';
+          return {
+            key: `${day.weekday}-${ex.id}`,
+            weekday: day.weekday,
+            dayTitle: day.title,
+            name: ex.name,
+            sets: ex.sets,
+            reps: ex.reps,
+            rest: ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`,
+            carico,
+          };
+        });
+      }
+      if (day.type === 'cardio') {
+        return [
+          {
+            key: day.weekday,
+            weekday: day.weekday,
+            dayTitle: day.title,
+            name: day.note ?? 'Corsa',
+            sets: null,
+            reps: null,
+            rest: null,
+            carico: null,
+          },
+        ];
+      }
+      return [];
+    });
+  }, [currentMonth, progressSets]);
+
+  const goalLabel = labelFor(findQuestion('goal'), answers.goal) ?? '';
+
   const handleExport = async () => {
-    if (!plan) return;
+    if (!plan || !currentMonth) return;
     setExporting(true);
     try {
-      await exportTrainingPlanPdf(plan, currentUser.name);
+      await exportTrainingPlanPdf({
+        userName: currentUser.name,
+        goalNote: `Obiettivo: ${goalLabel}`,
+        totalMonths: plan.durationMonths,
+        monthIndex,
+        monthTitle: currentMonth.title,
+        monthFocus: currentMonth.focusNote,
+        rows,
+      });
     } catch {
       Alert.alert('Non riesco a generare il PDF', 'Riprova tra qualche istante.');
     } finally {
@@ -51,11 +106,6 @@ export default function TrainingPlanScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <ThemedText type="title">Piano di allenamento</ThemedText>
-          {plan ? (
-            <ThemedText type="caption" themeColor="textSecondary">
-              {plan.durationMonths} mesi
-            </ThemedText>
-          ) : null}
         </View>
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <GlassSurface level="card" radius={Radius.pill} style={styles.closeButton}>
@@ -66,9 +116,9 @@ export default function TrainingPlanScreen() {
         </Pressable>
       </View>
 
-      {!plan ? (
+      {!plan || !currentMonth ? (
         <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.two }}>
-          <ThemedText type="smallBold">Nessun piano di allenamento</ThemedText>
+          <ThemedText type="smallBold">Nessun programma generato</ThemedText>
           <ThemedText type="caption" themeColor="textSecondary">
             Hai completato il questionario in modalità “solo dieta”, oppure non hai selezionato sala pesi o corsa tra
             le attività. Rifai il questionario per generare qui il tuo programma.
@@ -76,6 +126,14 @@ export default function TrainingPlanScreen() {
         </GlassSurface>
       ) : (
         <>
+          <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four }}>
+            <PlanTimeline
+              totalMonths={plan.durationMonths}
+              currentMonth={monthIndex}
+              currentLabel={`Mese ${monthIndex} · ${PHASE_LABEL[currentMonth.phase]}`}
+            />
+          </GlassSurface>
+
           <View style={styles.actionsRow}>
             <PrimaryButton
               label={exporting ? 'Preparazione…' : 'Scarica PDF'}
@@ -87,85 +145,70 @@ export default function TrainingPlanScreen() {
             <PrimaryButton variant="ghost" label="Rigenera" icon="refresh" onPress={handleRegenerate} style={{ flex: 1 }} />
           </View>
 
-          <View style={{ gap: Spacing.three }}>
-            {plan.months.map((month) => (
-              <MonthCard
-                key={month.monthIndex}
-                month={month}
-                expanded={expandedMonth === month.monthIndex}
-                onToggle={() => setExpandedMonth(expandedMonth === month.monthIndex ? -1 : month.monthIndex)}
-              />
-            ))}
+          <View style={{ gap: Spacing.one }}>
+            <ThemedText type="subtitle">{currentMonth.title}</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {currentMonth.focusNote}
+            </ThemedText>
           </View>
+
+          <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three }}>
+            <View style={styles.tableHeaderRow}>
+              <ThemedText type="label" themeColor="textSecondary" style={styles.colExercise}>
+                Esercizio
+              </ThemedText>
+              <ThemedText type="label" themeColor="textSecondary" style={styles.colSmall}>
+                Serie
+              </ThemedText>
+              <ThemedText type="label" themeColor="textSecondary" style={styles.colSmall}>
+                Rip
+              </ThemedText>
+              <ThemedText type="label" themeColor="textSecondary" style={styles.colMedium}>
+                Recupero
+              </ThemedText>
+              <ThemedText type="label" themeColor="textSecondary" style={styles.colMedium}>
+                Carico
+              </ThemedText>
+            </View>
+            {rows.map((row, i) => {
+              const showDay = i === 0 || rows[i - 1].weekday !== row.weekday;
+              return (
+                <View key={row.key}>
+                  {showDay ? (
+                    <View style={[styles.dayHeadingRow, { backgroundColor: theme.backgroundElement }]}>
+                      <ThemedText type="caption" style={{ fontWeight: '700' }}>
+                        {row.weekday} · {row.dayTitle}
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                  <View style={[styles.tableRow, { borderTopColor: theme.border }]}>
+                    <ThemedText type="small" style={styles.colExercise}>
+                      {row.name}
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.colSmall}>
+                      {row.sets ?? '—'}
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.colSmall}>
+                      {row.reps ?? '—'}
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.colMedium}>
+                      {row.rest ?? '—'}
+                    </ThemedText>
+                    <ThemedText type="small" style={[styles.colMedium, { color: theme.accent, fontWeight: '700' }]}>
+                      {row.carico ?? '—'}
+                    </ThemedText>
+                  </View>
+                </View>
+              );
+            })}
+          </GlassSurface>
+
+          <ThemedText type="caption" themeColor="textTertiary">
+            ~ = carico consigliato per iniziare. Registra le tue serie per sostituirlo con il carico reale.
+          </ThemedText>
         </>
       )}
     </ScreenScroll>
-  );
-}
-
-function MonthCard({ month, expanded, onToggle }: { month: TrainingMonthPlan; expanded: boolean; onToggle: () => void }) {
-  const theme = useTheme();
-  const phaseColor = month.phase === 'consolidamento' ? theme.success : theme.accent;
-
-  return (
-    <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.three }}>
-      <Pressable onPress={onToggle} style={styles.monthHeader}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <View style={[styles.phaseTag, { backgroundColor: theme.accentSoft }]}>
-            <ThemedText type="caption" style={{ color: phaseColor, fontWeight: '700' }}>
-              {PHASE_LABEL[month.phase]}
-            </ThemedText>
-          </View>
-          <ThemedText type="smallBold">{month.title}</ThemedText>
-        </View>
-        <Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={18} color={theme.textTertiary} />
-      </Pressable>
-
-      <ThemedText type="caption" themeColor="textSecondary">
-        {month.focusNote}
-      </ThemedText>
-
-      {expanded ? (
-        <View style={{ gap: Spacing.one }}>
-          {month.weeklySplit.map((day) => (
-            <DayRow key={day.weekday} day={day} />
-          ))}
-        </View>
-      ) : null}
-    </GlassSurface>
-  );
-}
-
-function DayRow({ day }: { day: TrainingDayPlan }) {
-  const theme = useTheme();
-  const icon = day.type === 'workout' ? 'gym' : day.type === 'cardio' ? 'running' : 'moon';
-  const iconColor = day.type === 'rest' ? theme.textTertiary : theme.accent;
-
-  return (
-    <View style={[styles.dayRow, { borderColor: theme.border }]}>
-      <View style={[styles.dayIcon, { backgroundColor: theme.accentSoft }]}>
-        <Icon name={icon} size={16} color={iconColor} />
-      </View>
-      <View style={{ width: 34 }}>
-        <ThemedText type="caption" themeColor="textSecondary">
-          {day.weekday}
-        </ThemedText>
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <ThemedText type="small" style={{ fontWeight: '700' }}>
-          {day.title}
-        </ThemedText>
-        {day.type === 'workout' ? (
-          <ThemedText type="caption" themeColor="textSecondary">
-            {(day.exercises ?? []).map((e) => `${e.name} ${e.sets}×${e.reps}`).join(' · ')}
-          </ThemedText>
-        ) : day.type === 'cardio' ? (
-          <ThemedText type="caption" themeColor="textSecondary">
-            {day.note}
-          </ThemedText>
-        ) : null}
-      </View>
-    </View>
   );
 }
 
@@ -188,29 +231,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
   },
-  monthHeader: {
+  tableHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.two,
-  },
-  phaseTag: {
-    alignSelf: 'flex-start',
     paddingHorizontal: Spacing.two,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
+    paddingBottom: Spacing.two,
   },
-  dayRow: {
+  dayHeadingRow: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.small,
+    marginTop: Spacing.two,
+  },
+  tableRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.two,
+    paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  dayIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.small,
     alignItems: 'center',
-    justifyContent: 'center',
   },
+  colExercise: { flex: 1, paddingRight: 4 },
+  colSmall: { width: 38 },
+  colMedium: { width: 72 },
 });

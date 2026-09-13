@@ -4,6 +4,7 @@ import {
   HOME_EXERCISES,
   RUNNING_SESSIONS,
   SPLIT_BY_FREQUENCY,
+  suggestedLoadFor,
   WEEKDAY_LABELS,
   WEEKDAY_PATTERN,
   type SplitLabel,
@@ -63,6 +64,7 @@ export function generateTrainingPlan(input: TrainingPlanInput): TrainingPlan | n
 
   const durationMonths = computePlanDurationMonths(answers);
   const totalAvailable = availableDaysNum(answers.availableDays);
+  const bodyweightKg = Number(answers.currentWeightKg) || 75;
 
   let gymDays = practicesGym ? freqNum(answers.freq_gym) || 3 : 0;
   let runDays = practicesRunning ? freqNum(answers.freq_running) || 2 : 0;
@@ -97,11 +99,13 @@ export function generateTrainingPlan(input: TrainingPlanInput): TrainingPlan | n
 
     gymSlots.forEach((dayIdx, i) => {
       const splitLabel = splitLabels[i % splitLabels.length];
-      const exercises: TrainingExerciseEntry[] = exercisePool[splitLabel].map((name) => ({
-        name,
+      const exercises: TrainingExerciseEntry[] = exercisePool[splitLabel].map((def) => ({
+        id: def.id,
+        name: def.name,
         sets: scheme.sets,
         reps: scheme.reps,
         restSec: scheme.restSec,
+        suggestedKg: suggestedLoadFor(def, bodyweightKg, phase === 'adattamento'),
       }));
       week[dayIdx] = { weekday: WEEKDAY_LABELS[dayIdx], type: 'workout', title: splitLabel, exercises };
     });

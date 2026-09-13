@@ -9,39 +9,42 @@ import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SectionHeader } from '@/components/ui/section-header';
-import { StatTile } from '@/components/ui/stat-tile';
-import { ExerciseLogRow } from '@/components/training/exercise-log-row';
-import { WeekStrip } from '@/components/training/week-strip';
+import { PlanExerciseRow } from '@/components/training/plan-exercise-row';
+import { PlanTimeline } from '@/components/training/plan-timeline';
+import { WeekStrip, type WeekStripDayType } from '@/components/training/week-strip';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
-import { sportIcon, sportMeta } from '@/lib/mock/training';
-import type { Sport } from '@/lib/mock/types';
+import { currentMonthIndex } from '@/lib/planning/plan-progress';
+import type { TrainingDayPlan } from '@/lib/planning/types';
 import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
 import {
-  exerciseTopSetHistory,
-  planAdherence,
+  historyForExercise,
+  latestWeightForExercise,
   setsForExerciseOnDate,
-  templateById,
-  useTrainingStore,
-  type ExerciseSetLog,
-  type WorkoutTemplate,
-} from '@/store/training-store';
+  useTrainingProgressStore,
+} from '@/store/training-progress-store';
 import { useUserStore } from '@/store/user-store';
 
+const PHASE_LABEL: Record<string, string> = {
+  adattamento: 'Adattamento',
+  progressione: 'Progressione',
+  consolidamento: 'Consolidamento',
+};
+
 export default function TrainingScreen() {
-  const { plan, templates, logs, logSet } = useTrainingStore();
-  const weekDates = useMemo(() => currentWeekDates(), []);
-  const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
+  const theme = useTheme();
   const trainingPlan = usePlanStore((s) => s.trainingPlan);
   const generatePlans = usePlanStore((s) => s.generatePlans);
   const onboardingAnswers = useOnboardingStore((s) => s.answers);
   const currentUser = useUserStore();
+  const progressSets = useTrainingProgressStore((s) => s.sets);
+  const logSet = useTrainingProgressStore((s) => s.logSet);
+  const removeSet = useTrainingProgressStore((s) => s.removeSet);
 
-  const planDay = plan[mondayIndex(new Date(selectedDate))];
-  const todayPlanDay = plan[mondayIndex(new Date())];
-  const { planned, done } = useMemo(() => planAdherence(plan, logs, 14), [plan, logs]);
+  const weekDates = useMemo(() => currentWeekDates(), []);
+  const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
 
   useEffect(() => {
     if (trainingPlan || onboardingAnswers.mode === 'diet') return;
@@ -49,149 +52,96 @@ export default function TrainingScreen() {
       dailyCalorieTarget: currentUser.dailyCalorieTarget,
       macroTargetsG: currentUser.macroTargetsG,
     });
+    // Only needs to run once per missing-plan case, not on every keystroke of onboardingAnswers/currentUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainingPlan]);
 
+  const monthIndex = trainingPlan ? currentMonthIndex(trainingPlan) : 1;
+  const currentMonth = trainingPlan?.months.find((m) => m.monthIndex === monthIndex);
+  const weeklySplit = currentMonth?.weeklySplit ?? [];
+  const dayTypes: WeekStripDayType[] = weeklySplit.map((d) => d.type);
+  const selectedDay: TrainingDayPlan | undefined = weeklySplit[mondayIndex(new Date(selectedDate))];
+
   return (
     <ScreenScroll>
-      <ScreenHeader eyebrow="Scheda settimanale" title="Training" />
+      <ScreenHeader eyebrow="Il tuo programma" title="Training" />
 
-      <View style={styles.statsRow}>
-        <StatTile label="Aderenza piano" value={`${done}/${planned}`} unit="ultimi 14gg" icon="check" />
-        <StatTile
-          label="Oggi"
-          value={
-            todayPlanDay.type === 'workout'
-              ? templateById(templates, todayPlanDay.templateId)?.dayLabel ?? '—'
-              : todayPlanDay.type === 'cardio'
-                ? todayPlanDay.label
-                : 'Riposo'
-          }
-          icon={todayPlanDay.type === 'workout' ? 'gym' : todayPlanDay.type === 'cardio' ? sportIcon[todayPlanDay.sport] : 'moon'}
-        />
-      </View>
-
-      <View>
-        <SectionHeader title="Il tuo programma" />
-        <GlassSurface level="card" radius={Radius.large} style={styles.planCard}>
-          {trainingPlan ? (
-            <>
-              <View style={{ flex: 1, gap: 2 }}>
-                <ThemedText type="smallBold">Programma di {trainingPlan.durationMonths} mesi</ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {trainingPlan.months[0].title}: {trainingPlan.months[0].focusNote}
-                </ThemedText>
-              </View>
-              <PrimaryButton label="Vedi piano" onPress={() => router.push('/training-plan')} style={styles.planButton} />
-            </>
-          ) : (
-            <View style={{ flex: 1, gap: 2 }}>
-              <ThemedText type="smallBold">Nessun programma generato</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Rifai il questionario scegliendo sala pesi o corsa tra le attività per generarne uno.
-              </ThemedText>
-            </View>
-          )}
+      {!trainingPlan ? (
+        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.two }}>
+          <ThemedText type="smallBold">Nessun programma generato</ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Rifai il questionario scegliendo sala pesi o corsa tra le attività per generarne uno.
+          </ThemedText>
         </GlassSurface>
-      </View>
-
-      <WeekStrip dates={weekDates} plan={plan} selectedDate={selectedDate} onSelect={setSelectedDate} />
-
-      {planDay.type === 'workout' ? (
-        <WorkoutDay
-          templateId={planDay.templateId}
-          date={selectedDate}
-          logs={logs}
-          templates={templates}
-          onAddSet={(exerciseId, reps, weightKg) => logSet(planDay.templateId, exerciseId, reps, weightKg, selectedDate)}
-        />
-      ) : planDay.type === 'cardio' ? (
-        <CardioDay label={planDay.label} sport={planDay.sport} durationMin={planDay.durationMin} />
       ) : (
-        <RestDay />
+        <>
+          <View>
+            <SectionHeader title="Il tuo piano" />
+            <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.three }}>
+              <PlanTimeline
+                totalMonths={trainingPlan.durationMonths}
+                currentMonth={monthIndex}
+                currentLabel={`Mese ${monthIndex} · ${PHASE_LABEL[currentMonth?.phase ?? 'adattamento']}`}
+              />
+              <PrimaryButton
+                variant="ghost"
+                label="Mostra piano"
+                icon="chevronRight"
+                onPress={() => router.push('/training-plan')}
+              />
+            </GlassSurface>
+          </View>
+
+          <View style={{ gap: Spacing.three }}>
+            <SectionHeader title="Calendario" />
+            <WeekStrip dates={weekDates} dayTypes={dayTypes} selectedDate={selectedDate} onSelect={setSelectedDate} />
+          </View>
+
+          {selectedDay?.type === 'workout' ? (
+            <View>
+              <SectionHeader title={selectedDay.title} />
+              <View style={{ gap: Spacing.three }}>
+                {(selectedDay.exercises ?? []).map((exercise, exerciseIndex) => (
+                  <PlanExerciseRow
+                    key={`${exercise.id}-${exerciseIndex}`}
+                    exercise={exercise}
+                    setsToday={setsForExerciseOnDate(progressSets, exercise.id, selectedDate)}
+                    history={historyForExercise(progressSets, exercise.id)}
+                    latestWeightKg={latestWeightForExercise(progressSets, exercise.id)}
+                    onAddSet={(reps, weightKg) => logSet(exercise.id, exercise.name, reps, weightKg, selectedDate)}
+                    onRemoveSet={removeSet}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : selectedDay?.type === 'cardio' ? (
+            <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
+              <View style={[styles.dayIcon, { backgroundColor: theme.accentSoft }]}>
+                <Icon name="running" size={26} color={theme.accent} />
+              </View>
+              <ThemedText type="subtitle">{selectedDay.title}</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {selectedDay.note}
+              </ThemedText>
+            </GlassSurface>
+          ) : (
+            <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
+              <View style={[styles.dayIcon, { backgroundColor: theme.backgroundElement }]}>
+                <Icon name="moon" size={26} color={theme.textSecondary} />
+              </View>
+              <ThemedText type="subtitle">Giorno di riposo</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                Il recupero fa parte del piano: dormi bene e resta idratato.
+              </ThemedText>
+            </GlassSurface>
+          )}
+        </>
       )}
     </ScreenScroll>
   );
 }
 
-function WorkoutDay({
-  templateId,
-  date,
-  logs,
-  templates,
-  onAddSet,
-}: {
-  templateId: string;
-  date: string;
-  logs: ExerciseSetLog[];
-  templates: WorkoutTemplate[];
-  onAddSet: (exerciseId: string, reps: number, weightKg: number) => void;
-}) {
-  const template = templateById(templates, templateId);
-  if (!template) return null;
-
-  return (
-    <View>
-      <SectionHeader title={template.title} />
-      <View style={{ gap: Spacing.three }}>
-        {template.exercises.map((exercise) => (
-          <ExerciseLogRow
-            key={exercise.id}
-            exercise={exercise}
-            setsToday={setsForExerciseOnDate(logs, exercise.id, date)}
-            history={exerciseTopSetHistory(logs, exercise.id)}
-            onAddSet={(reps, weightKg) => onAddSet(exercise.id, reps, weightKg)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function CardioDay({ label, sport, durationMin }: { label: string; sport: Sport; durationMin: number }) {
-  const theme = useTheme();
-  return (
-    <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
-      <View style={[styles.dayIcon, { backgroundColor: theme.accentSoft }]}>
-        <Icon name={sportIcon[sport]} size={26} color={theme.accent} />
-      </View>
-      <ThemedText type="subtitle">{label}</ThemedText>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {sportMeta[sport].label} · {durationMin} min
-      </ThemedText>
-    </GlassSurface>
-  );
-}
-
-function RestDay() {
-  const theme = useTheme();
-  return (
-    <GlassSurface level="card" radius={Radius.large} style={styles.dayCard}>
-      <View style={[styles.dayIcon, { backgroundColor: theme.backgroundElement }]}>
-        <Icon name="moon" size={26} color={theme.textSecondary} />
-      </View>
-      <ThemedText type="subtitle">Giorno di riposo</ThemedText>
-      <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-        Il recupero fa parte del piano: dormi bene e resta idratato.
-      </ThemedText>
-    </GlassSurface>
-  );
-}
-
 const styles = StyleSheet.create({
-  planCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-  },
-  planButton: {
-    flexShrink: 0,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
   dayCard: {
     alignItems: 'center',
     gap: Spacing.two,

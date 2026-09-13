@@ -10,22 +10,89 @@ export const SPLIT_BY_FREQUENCY: Record<number, SplitLabel[]> = {
   6: ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs'],
 };
 
-export const GYM_EXERCISES: Record<SplitLabel, string[]> = {
-  'Full Body': ['Back squat', 'Panca piana', 'Rematore con bilanciere', 'Plank'],
-  Upper: ['Panca piana', 'Trazioni alla sbarra', 'Military press', 'Curl bicipiti'],
-  Lower: ['Back squat', 'Romanian deadlift', 'Leg press', 'Affondi'],
-  Push: ['Panca piana', 'Military press', 'Dip alle parallele', 'Alzate laterali'],
-  Pull: ['Stacco da terra', 'Trazioni zavorrate', 'Rematore con bilanciere', 'Curl bicipiti'],
-  Legs: ['Back squat', 'Romanian deadlift', 'Leg press', 'Affondi'],
+export type ExerciseDef = {
+  id: string;
+  name: string;
+  /** Conservative starting-load heuristic as a multiple of bodyweight, or null for bodyweight/band exercises. */
+  bwMultiplier: number | null;
 };
 
-export const HOME_EXERCISES: Record<SplitLabel, string[]> = {
-  'Full Body': ['Squat a corpo libero/manubri', 'Push-up', 'Rematore con manubrio', 'Plank'],
-  Upper: ['Push-up', 'Rematore con elastico', 'Shoulder press con manubri', 'Curl con manubri'],
-  Lower: ['Squat con manubri', 'Affondi', 'Hip thrust', 'Polpacci in piedi'],
-  Push: ['Push-up', 'Shoulder press con manubri', 'Dip su sedia', 'Alzate laterali con manubri'],
-  Pull: ['Rematore con manubrio', 'Trazioni o lat pulldown con elastico', 'Face pull con elastico', 'Curl con manubri'],
-  Legs: ['Squat con manubri', 'Affondi', 'Hip thrust', 'Stacco rumeno con manubri'],
+export const GYM_EXERCISES: Record<SplitLabel, ExerciseDef[]> = {
+  'Full Body': [
+    { id: 'back-squat', name: 'Back squat', bwMultiplier: 0.75 },
+    { id: 'panca-piana', name: 'Panca piana', bwMultiplier: 0.5 },
+    { id: 'rematore-bilanciere', name: 'Rematore con bilanciere', bwMultiplier: 0.4 },
+    { id: 'plank', name: 'Plank', bwMultiplier: null },
+  ],
+  Upper: [
+    { id: 'panca-piana', name: 'Panca piana', bwMultiplier: 0.5 },
+    { id: 'trazioni-sbarra', name: 'Trazioni alla sbarra', bwMultiplier: null },
+    { id: 'military-press', name: 'Military press', bwMultiplier: 0.35 },
+    { id: 'curl-bicipiti', name: 'Curl bicipiti', bwMultiplier: 0.15 },
+  ],
+  Lower: [
+    { id: 'back-squat', name: 'Back squat', bwMultiplier: 0.75 },
+    { id: 'romanian-deadlift', name: 'Romanian deadlift', bwMultiplier: 0.6 },
+    { id: 'leg-press', name: 'Leg press', bwMultiplier: 1.0 },
+    { id: 'affondi', name: 'Affondi', bwMultiplier: 0.15 },
+  ],
+  Push: [
+    { id: 'panca-piana', name: 'Panca piana', bwMultiplier: 0.5 },
+    { id: 'military-press', name: 'Military press', bwMultiplier: 0.35 },
+    { id: 'dip-parallele', name: 'Dip alle parallele', bwMultiplier: null },
+    { id: 'alzate-laterali', name: 'Alzate laterali', bwMultiplier: 0.05 },
+  ],
+  Pull: [
+    { id: 'stacco-da-terra', name: 'Stacco da terra', bwMultiplier: 0.9 },
+    { id: 'trazioni-zavorrate', name: 'Trazioni zavorrate', bwMultiplier: null },
+    { id: 'rematore-bilanciere', name: 'Rematore con bilanciere', bwMultiplier: 0.4 },
+    { id: 'curl-bicipiti', name: 'Curl bicipiti', bwMultiplier: 0.15 },
+  ],
+  Legs: [
+    { id: 'back-squat', name: 'Back squat', bwMultiplier: 0.75 },
+    { id: 'romanian-deadlift', name: 'Romanian deadlift', bwMultiplier: 0.6 },
+    { id: 'leg-press', name: 'Leg press', bwMultiplier: 1.0 },
+    { id: 'affondi', name: 'Affondi', bwMultiplier: 0.15 },
+  ],
+};
+
+export const HOME_EXERCISES: Record<SplitLabel, ExerciseDef[]> = {
+  'Full Body': [
+    { id: 'squat-manubri', name: 'Squat con manubri', bwMultiplier: 0.15 },
+    { id: 'push-up', name: 'Push-up', bwMultiplier: null },
+    { id: 'rematore-manubrio', name: 'Rematore con manubrio', bwMultiplier: 0.12 },
+    { id: 'plank', name: 'Plank', bwMultiplier: null },
+  ],
+  Upper: [
+    { id: 'push-up', name: 'Push-up', bwMultiplier: null },
+    { id: 'rematore-elastico', name: 'Rematore con elastico', bwMultiplier: null },
+    { id: 'shoulder-press-manubri', name: 'Shoulder press con manubri', bwMultiplier: 0.08 },
+    { id: 'curl-manubri', name: 'Curl con manubri', bwMultiplier: 0.06 },
+  ],
+  Lower: [
+    { id: 'squat-manubri', name: 'Squat con manubri', bwMultiplier: 0.15 },
+    { id: 'affondi-manubri', name: 'Affondi', bwMultiplier: 0.1 },
+    { id: 'hip-thrust', name: 'Hip thrust', bwMultiplier: 0.3 },
+    { id: 'polpacci-piedi', name: 'Polpacci in piedi', bwMultiplier: 0.1 },
+  ],
+  Push: [
+    { id: 'push-up', name: 'Push-up', bwMultiplier: null },
+    { id: 'shoulder-press-manubri', name: 'Shoulder press con manubri', bwMultiplier: 0.08 },
+    { id: 'dip-sedia', name: 'Dip su sedia', bwMultiplier: null },
+    { id: 'alzate-laterali-manubri', name: 'Alzate laterali con manubri', bwMultiplier: 0.03 },
+  ],
+  Pull: [
+    { id: 'rematore-manubrio', name: 'Rematore con manubrio', bwMultiplier: 0.12 },
+    { id: 'trazioni-lat-elastico', name: 'Trazioni o lat pulldown con elastico', bwMultiplier: null },
+    { id: 'face-pull-elastico', name: 'Face pull con elastico', bwMultiplier: null },
+    { id: 'curl-manubri', name: 'Curl con manubri', bwMultiplier: 0.06 },
+  ],
+  Legs: [
+    { id: 'squat-manubri', name: 'Squat con manubri', bwMultiplier: 0.15 },
+    { id: 'affondi-manubri', name: 'Affondi', bwMultiplier: 0.1 },
+    { id: 'hip-thrust', name: 'Hip thrust', bwMultiplier: 0.3 },
+    { id: 'stacco-rumeno-manubri', name: 'Stacco rumeno con manubri', bwMultiplier: 0.2 },
+  ],
 };
 
 export type SetScheme = { sets: number; reps: string; restSec: number };
@@ -75,3 +142,15 @@ export const WEEKDAY_PATTERN: Record<number, number[]> = {
   6: [0, 1, 2, 3, 5, 6],
   7: [0, 1, 2, 3, 4, 5, 6],
 };
+
+/** Rounds a suggested load to a plate/dumbbell-friendly step. */
+export function roundLoad(raw: number): number {
+  const step = raw >= 20 ? 2.5 : raw >= 5 ? 1 : 0.5;
+  return Math.round(raw / step) * step;
+}
+
+export function suggestedLoadFor(exercise: ExerciseDef, bodyweightKg: number, isAdattamento: boolean): number | null {
+  if (exercise.bwMultiplier == null) return null;
+  const raw = bodyweightKg * exercise.bwMultiplier * (isAdattamento ? 0.85 : 1);
+  return roundLoad(raw);
+}

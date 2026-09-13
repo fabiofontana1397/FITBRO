@@ -4,28 +4,29 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dayOfMonth, isToday, weekdayShort } from '@/lib/mock/dates';
-import type { PlanDay } from '@/store/training-store';
+
+export type WeekStripDayType = 'workout' | 'cardio' | 'rest';
 
 export type WeekStripProps = {
   dates: string[];
-  plan: PlanDay[];
+  dayTypes: WeekStripDayType[];
   selectedDate: string;
   onSelect: (date: string) => void;
 };
 
-function dotColorFor(planDay: PlanDay, theme: ReturnType<typeof useTheme>) {
-  if (planDay.type === 'rest') return theme.textTertiary;
-  if (planDay.type === 'cardio') return theme.success;
-  return theme.accent;
+function dotColorFor(dayType: WeekStripDayType | undefined, theme: ReturnType<typeof useTheme>) {
+  if (dayType === 'cardio') return theme.success;
+  if (dayType === 'workout') return theme.accent;
+  return theme.textTertiary;
 }
 
-export function WeekStrip({ dates, plan, selectedDate, onSelect }: WeekStripProps) {
+export function WeekStrip({ dates, dayTypes, selectedDate, onSelect }: WeekStripProps) {
   const theme = useTheme();
 
   return (
     <View style={styles.row}>
       {dates.map((date, index) => {
-        const planDay = plan[index];
+        const dayType = dayTypes[index];
         const selected = date === selectedDate;
         const today = isToday(date);
         return (
@@ -44,7 +45,7 @@ export function WeekStrip({ dates, plan, selectedDate, onSelect }: WeekStripProp
               <ThemedText type="smallBold" style={{ color: selected ? theme.onAccent : theme.text }}>
                 {dayOfMonth(date)}
               </ThemedText>
-              <View style={[styles.dot, { backgroundColor: selected ? theme.onAccent : dotColorFor(planDay, theme) }]} />
+              <View style={[styles.dot, { backgroundColor: selected ? theme.onAccent : dotColorFor(dayType, theme) }]} />
             </View>
           </Pressable>
         );

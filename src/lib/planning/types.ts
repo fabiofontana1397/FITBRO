@@ -29,7 +29,15 @@ export type DietPlan = {
   months: DietMonthPlan[];
 };
 
-export type TrainingExerciseEntry = { name: string; sets: number; reps: string; restSec: number };
+export type TrainingExerciseEntry = {
+  id: string;
+  name: string;
+  sets: number;
+  reps: string;
+  restSec: number;
+  /** Conservative starting point in kg, or null for bodyweight/band exercises with no load to suggest. */
+  suggestedKg: number | null;
+};
 
 export type TrainingDayPlan = {
   weekday: string;
