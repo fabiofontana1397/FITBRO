@@ -3,6 +3,7 @@ import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, View } 
 import Animated, {
   Extrapolation,
   interpolate,
+  runOnJS,
   scrollTo,
   useAnimatedRef,
   useAnimatedScrollHandler,
@@ -22,11 +23,18 @@ export type DayWheelProps = {
   selectedDate: string;
   dayTypeForDate: (date: string) => DayWheelDayType | undefined;
   onSelect: (date: string) => void;
+  /** Fires continuously as the wheel is dragged — even before it settles —
+   * so a "month" label above it can track the day passing under the
+   * center marker instead of jumping only once scrolling stops. */
+  onCenterChange?: (date: string) => void;
 };
 
 const ITEM_WIDTH = 56;
-const DAYS_BEFORE = 60;
-const DAYS_AFTER = 180;
+// The plan reads day-by-day from today for the active ~30-day month, so the
+// wheel only ever needs to span that same window — scrolling into days
+// before the plan started, or past its current month, would show exercises
+// that don't actually belong to whatever date is centered.
+const DAYS_AHEAD = 29;
 
 function dotColorFor(dayType: DayWheelDayType | undefined, theme: ReturnType<typeof useTheme>) {
   if (dayType === 'cardio') return theme.success;
@@ -37,23 +45,37 @@ function dotColorFor(dayType: DayWheelDayType | undefined, theme: ReturnType<typ
 /** A continuously scrollable, snap-to-day picker — like the iOS alarm-time
  * wheel, but horizontal: the centered day is emphasized, neighbors shrink
  * and fade with distance, replacing the old paginated Mon–Sun strip. */
-export function DayWheel({ selectedDate, dayTypeForDate, onSelect }: DayWheelProps) {
+export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChange }: DayWheelProps) {
   const theme = useTheme();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollX = useSharedValue(0);
+  const reportedIndex = useSharedValue(-1);
   const [containerWidth, setContainerWidth] = useState(0);
 
   const dates = useMemo(() => {
-    const start = daysAgoISO(DAYS_BEFORE);
-    return Array.from({ length: DAYS_BEFORE + DAYS_AFTER + 1 }, (_, i) => addDaysISO(start, i));
+    const start = daysAgoISO(0);
+    return Array.from({ length: DAYS_AHEAD + 1 }, (_, i) => addDaysISO(start, i));
   }, []);
 
   const selectedIndex = dates.indexOf(selectedDate);
   const sidePadding = containerWidth > 0 ? (containerWidth - ITEM_WIDTH) / 2 : 0;
 
+  const reportCenterIndex = useCallback(
+    (rawIndex: number) => {
+      const index = Math.min(Math.max(rawIndex, 0), dates.length - 1);
+      onCenterChange?.(dates[index]);
+    },
+    [dates, onCenterChange]
+  );
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
+      const index = Math.round(event.contentOffset.x / ITEM_WIDTH);
+      if (index !== reportedIndex.value) {
+        reportedIndex.value = index;
+        runOnJS(reportCenterIndex)(index);
+      }
     },
   });
 

@@ -43,10 +43,14 @@ export default function TrainingScreen() {
   const toggleCompleted = useTrainingProgressStore((s) => s.toggleCompleted);
 
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
+  // Tracks the day currently centered under the wheel while dragging, so the
+  // month/year label can follow the scroll live instead of jumping only once
+  // it settles on `selectedDate`.
+  const [visibleDate, setVisibleDate] = useState(selectedDate);
   const monthYearLabel = useMemo(() => {
-    const label = new Date(selectedDate).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    const label = new Date(visibleDate).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
     return label.charAt(0).toUpperCase() + label.slice(1);
-  }, [selectedDate]);
+  }, [visibleDate]);
 
   const planStoreHydrated = useStoreHydrated(usePlanStore);
   const onboardingHydrated = useStoreHydrated(useOnboardingStore);
@@ -127,7 +131,12 @@ export default function TrainingScreen() {
             <ThemedText type="smallBold" style={styles.monthYearLabel}>
               {monthYearLabel}
             </ThemedText>
-            <DayWheel selectedDate={selectedDate} dayTypeForDate={dayTypeForDate} onSelect={setSelectedDate} />
+            <DayWheel
+              selectedDate={selectedDate}
+              dayTypeForDate={dayTypeForDate}
+              onSelect={setSelectedDate}
+              onCenterChange={setVisibleDate}
+            />
           </View>
 
           {selectedDay?.type === 'workout' ? (
