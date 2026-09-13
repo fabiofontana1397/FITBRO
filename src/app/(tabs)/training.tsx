@@ -13,6 +13,7 @@ import { PlanExerciseRow } from '@/components/training/plan-exercise-row';
 import { PlanTimeline } from '@/components/training/plan-timeline';
 import { WeekStrip, type WeekStripDayType } from '@/components/training/week-strip';
 import { Radius, Spacing } from '@/constants/theme';
+import { useStoreHydrated } from '@/hooks/use-store-hydrated';
 import { useTheme } from '@/hooks/use-theme';
 import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
@@ -55,7 +56,17 @@ export default function TrainingScreen() {
   const goToPrevWeek = () => setSelectedDate((d) => addDaysISO(d, -7));
   const goToNextWeek = () => setSelectedDate((d) => addDaysISO(d, 7));
 
+  const planStoreHydrated = useStoreHydrated(usePlanStore);
+  const onboardingHydrated = useStoreHydrated(useOnboardingStore);
+  const userStoreHydrated = useStoreHydrated(useUserStore);
+
   useEffect(() => {
+    // Persisted stores rehydrate from AsyncStorage asynchronously. Without
+    // this gate, a returning user's plan/onboarding answers/profile could
+    // still be at their in-memory defaults on first render, generating (and
+    // permanently caching) a plan from empty/default data — the trainingPlan
+    // dependency below would then never change to retrigger it.
+    if (!planStoreHydrated || !onboardingHydrated || !userStoreHydrated) return;
     if (isValidTrainingPlan(trainingPlan) || onboardingAnswers.mode === 'diet') return;
     generatePlans(onboardingAnswers, {
       dailyCalorieTarget: currentUser.dailyCalorieTarget,
@@ -63,7 +74,7 @@ export default function TrainingScreen() {
     });
     // Only needs to run once per missing/invalid-plan case, not on every keystroke of onboardingAnswers/currentUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trainingPlan]);
+  }, [trainingPlan, planStoreHydrated, onboardingHydrated, userStoreHydrated]);
 
   const monthIndex = trainingPlan ? currentMonthIndex(trainingPlan) : 1;
   const currentMonth = trainingPlan?.months.find((m) => m.monthIndex === monthIndex);

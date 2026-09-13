@@ -17,6 +17,7 @@ import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Radius, Spacing } from '@/constants/theme';
 import { TimingSlow } from '@/constants/motion';
+import { useStoreHydrated } from '@/hooks/use-store-hydrated';
 import { useTheme } from '@/hooks/use-theme';
 import { addDaysISO, currentWeekDates, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
@@ -45,7 +46,17 @@ export default function NutritionScreen() {
   const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
 
+  const planStoreHydrated = useStoreHydrated(usePlanStore);
+  const onboardingHydrated = useStoreHydrated(useOnboardingStore);
+  const userStoreHydrated = useStoreHydrated(useUserStore);
+
   useEffect(() => {
+    // Persisted stores rehydrate from AsyncStorage asynchronously. Without
+    // this gate, a returning user's plan/onboarding answers/profile could
+    // still be at their in-memory defaults on first render, generating (and
+    // permanently caching) a plan from empty/default data — the dietPlan
+    // dependency below would then never change to retrigger it.
+    if (!planStoreHydrated || !onboardingHydrated || !userStoreHydrated) return;
     if (dietPlan || onboardingAnswers.mode === 'training') return;
     generatePlans(onboardingAnswers, {
       dailyCalorieTarget: currentUser.dailyCalorieTarget,
@@ -53,7 +64,7 @@ export default function NutritionScreen() {
     });
     // Only needs to run once per missing-plan case, not on every keystroke of onboardingAnswers/currentUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dietPlan]);
+  }, [dietPlan, planStoreHydrated, onboardingHydrated, userStoreHydrated]);
 
   const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
   const loggedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
