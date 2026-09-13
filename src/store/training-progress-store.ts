@@ -13,10 +13,14 @@ export type LoggedSet = {
   weightKg: number;
 };
 
+export type CompletedExercise = { exerciseId: string; date: string };
+
 type TrainingProgressState = {
   sets: LoggedSet[];
+  completed: CompletedExercise[];
   logSet: (exerciseId: string, exerciseName: string, reps: number, weightKg: number, date?: string) => void;
   removeSet: (id: string) => void;
+  toggleCompleted: (exerciseId: string, date: string) => void;
 };
 
 /**
@@ -30,6 +34,7 @@ export const useTrainingProgressStore = create<TrainingProgressState>()(
   persist(
     (set) => ({
       sets: [],
+      completed: [],
       logSet: (exerciseId, exerciseName, reps, weightKg, date = daysAgoISO(0)) =>
         set((state) => ({
           sets: [
@@ -38,6 +43,15 @@ export const useTrainingProgressStore = create<TrainingProgressState>()(
           ],
         })),
       removeSet: (id) => set((state) => ({ sets: state.sets.filter((s) => s.id !== id) })),
+      toggleCompleted: (exerciseId, date) =>
+        set((state) => {
+          const exists = state.completed.some((c) => c.exerciseId === exerciseId && c.date === date);
+          return {
+            completed: exists
+              ? state.completed.filter((c) => !(c.exerciseId === exerciseId && c.date === date))
+              : [...state.completed, { exerciseId, date }],
+          };
+        }),
     }),
     { name: 'fitbro/training-progress', storage: appJsonStorage }
   )
@@ -63,4 +77,8 @@ export function historyForExercise(sets: LoggedSet[], exerciseId: string): { dat
 export function latestWeightForExercise(sets: LoggedSet[], exerciseId: string): number | null {
   const history = historyForExercise(sets, exerciseId);
   return history.length > 0 ? history[history.length - 1].weightKg : null;
+}
+
+export function isExerciseCompleted(completed: CompletedExercise[], exerciseId: string, date: string): boolean {
+  return completed.some((c) => c.exerciseId === exerciseId && c.date === date);
 }

@@ -57,6 +57,7 @@ export default function RootLayout() {
           <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
           <Stack.Screen name="diet-plan" options={{ presentation: 'modal' }} />
           <Stack.Screen name="training-plan" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="training-progress" options={{ presentation: 'modal' }} />
         </Stack>
       </AuthGate>
     </ThemeProvider>

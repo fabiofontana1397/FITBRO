@@ -21,6 +21,7 @@ import { useOnboardingStore } from '@/store/onboarding-store';
 import { isValidTrainingPlan, usePlanStore } from '@/store/plan-store';
 import {
   historyForExercise,
+  isExerciseCompleted,
   latestWeightForExercise,
   setsForExerciseOnDate,
   useTrainingProgressStore,
@@ -40,8 +41,10 @@ export default function TrainingScreen() {
   const onboardingAnswers = useOnboardingStore((s) => s.answers);
   const currentUser = useUserStore();
   const progressSets = useTrainingProgressStore((s) => s.sets);
+  const completedExercises = useTrainingProgressStore((s) => s.completed);
   const logSet = useTrainingProgressStore((s) => s.logSet);
   const removeSet = useTrainingProgressStore((s) => s.removeSet);
+  const toggleCompleted = useTrainingProgressStore((s) => s.toggleCompleted);
 
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
   const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
@@ -84,15 +87,16 @@ export default function TrainingScreen() {
         <>
           <View>
             <SectionHeader title="Il tuo piano" />
-            <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.four, gap: Spacing.three }}>
+            <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.five, gap: Spacing.five }}>
               <View style={styles.planMetaRow}>
-                <View style={{ gap: 2 }}>
+                <View style={styles.planMetaItem}>
                   <ThemedText type="caption" themeColor="textSecondary">
                     Durata piano totale
                   </ThemedText>
                   <ThemedText type="smallBold">{trainingPlan.durationMonths} mesi</ThemedText>
                 </View>
-                <View style={{ gap: 2 }}>
+                <View style={[styles.planMetaDivider, { backgroundColor: theme.border }]} />
+                <View style={styles.planMetaItem}>
                   <ThemedText type="caption" themeColor="textSecondary">
                     Scheda attuale
                   </ThemedText>
@@ -107,12 +111,20 @@ export default function TrainingScreen() {
                 selectedMonth={monthIndex}
                 onSelectMonth={() => router.push('/training-plan')}
               />
-              <PrimaryButton
-                variant="ghost"
-                label="Mostra piano"
-                icon="chevronRight"
-                onPress={() => router.push('/training-plan')}
-              />
+              <View style={styles.planActionsRow}>
+                <PrimaryButton
+                  variant="ghost"
+                  label="Mostra piano"
+                  icon="chevronRight"
+                  onPress={() => router.push('/training-plan')}
+                />
+                <PrimaryButton
+                  variant="ghost"
+                  label="Andamento carichi"
+                  icon="trendUp"
+                  onPress={() => router.push('/training-progress')}
+                />
+              </View>
             </GlassSurface>
           </View>
 
@@ -141,6 +153,8 @@ export default function TrainingScreen() {
                     setsToday={setsForExerciseOnDate(progressSets, exercise.id, selectedDate)}
                     history={historyForExercise(progressSets, exercise.id)}
                     latestWeightKg={latestWeightForExercise(progressSets, exercise.id)}
+                    completed={isExerciseCompleted(completedExercises, exercise.id, selectedDate)}
+                    onToggleCompleted={() => toggleCompleted(exercise.id, selectedDate)}
                     onAddSet={(reps, weightKg) => logSet(exercise.id, exercise.name, reps, weightKg, selectedDate)}
                     onRemoveSet={removeSet}
                   />
@@ -177,7 +191,18 @@ export default function TrainingScreen() {
 const styles = StyleSheet.create({
   planMetaRow: {
     flexDirection: 'row',
-    gap: Spacing.five,
+    alignItems: 'stretch',
+    gap: Spacing.four,
+  },
+  planMetaItem: {
+    flex: 1,
+    gap: 4,
+  },
+  planMetaDivider: {
+    width: StyleSheet.hairlineWidth,
+  },
+  planActionsRow: {
+    gap: Spacing.two,
   },
   monthNavRow: {
     flexDirection: 'row',
