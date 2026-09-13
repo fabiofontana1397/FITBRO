@@ -43,7 +43,6 @@ export default function TrainingScreen() {
   const progressSets = useTrainingProgressStore((s) => s.sets);
   const completedExercises = useTrainingProgressStore((s) => s.completed);
   const logSet = useTrainingProgressStore((s) => s.logSet);
-  const removeSet = useTrainingProgressStore((s) => s.removeSet);
   const toggleCompleted = useTrainingProgressStore((s) => s.toggleCompleted);
 
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
@@ -146,19 +145,22 @@ export default function TrainingScreen() {
             <View>
               <SectionHeader title={selectedDay.title} />
               <View style={{ gap: Spacing.three }}>
-                {(selectedDay.exercises ?? []).map((exercise) => (
-                  <PlanExerciseRow
-                    key={exercise.id}
-                    exercise={exercise}
-                    setsToday={setsForExerciseOnDate(progressSets, exercise.id, selectedDate)}
-                    history={historyForExercise(progressSets, exercise.id)}
-                    latestWeightKg={latestWeightForExercise(progressSets, exercise.id)}
-                    completed={isExerciseCompleted(completedExercises, exercise.id, selectedDate)}
-                    onToggleCompleted={() => toggleCompleted(exercise.id, selectedDate)}
-                    onAddSet={(reps, weightKg) => logSet(exercise.id, exercise.name, reps, weightKg, selectedDate)}
-                    onRemoveSet={removeSet}
-                  />
-                ))}
+                {(selectedDay.exercises ?? []).map((exercise) => {
+                  const setsToday = setsForExerciseOnDate(progressSets, exercise.id, selectedDate);
+                  const loggedTodayKg = setsToday.length ? Math.max(...setsToday.map((s) => s.weightKg)) : null;
+                  return (
+                    <PlanExerciseRow
+                      key={exercise.id}
+                      exercise={exercise}
+                      history={historyForExercise(progressSets, exercise.id)}
+                      latestWeightKg={latestWeightForExercise(progressSets, exercise.id)}
+                      loggedTodayKg={loggedTodayKg}
+                      completed={isExerciseCompleted(completedExercises, exercise.id, selectedDate)}
+                      onToggleCompleted={() => toggleCompleted(exercise.id, selectedDate)}
+                      onAddLoad={(reps, weightKg) => logSet(exercise.id, exercise.name, reps, weightKg, selectedDate)}
+                    />
+                  );
+                })}
               </View>
             </View>
           ) : selectedDay?.type === 'cardio' ? (
