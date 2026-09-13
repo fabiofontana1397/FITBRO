@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
@@ -68,17 +68,6 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
     [dates, onCenterChange]
   );
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
-      const index = Math.round(event.contentOffset.x / ITEM_WIDTH);
-      if (index !== reportedIndex.value) {
-        reportedIndex.value = index;
-        runOnJS(reportCenterIndex)(index);
-      }
-    },
-  });
-
   const commitIndex = useCallback(
     (rawIndex: number) => {
       const index = Math.min(Math.max(rawIndex, 0), dates.length - 1);
@@ -88,25 +77,68 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
     [dates, onSelect, selectedDate]
   );
 
-  const handleSettle = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const index = Math.min(
-        Math.max(Math.round(event.nativeEvent.contentOffset.x / ITEM_WIDTH), 0),
-        dates.length - 1
-      );
+  const snapToNearest = useCallback(
+    (rawOffsetX: number) => {
+      const index = Math.min(Math.max(Math.round(rawOffsetX / ITEM_WIDTH), 0), dates.length - 1);
       // `snapToInterval` isn't reliably honored on every platform (notably
       // web), so momentum can end at an offset sitting between two days —
       // always correct it to the nearest item's exact position rather than
-      // leaving the wheel resting between two numbers.
+      // leaving the wheel resting between two numbers, unselected.
       scrollTo(scrollRef, index * ITEM_WIDTH, 0, true);
       commitIndex(index);
     },
     [commitIndex, dates.length, scrollRef]
   );
 
+  const handleSettle = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      snapToNearest(event.nativeEvent.contentOffset.x);
+    },
+    [snapToNearest]
+  );
+
+  // Backstop for input methods that don't reliably fire onScrollEndDrag /
+  // onMomentumScrollEnd — notably mouse-wheel/trackpad scrolling on web,
+  // which drives the browser's own smooth-scroll rather than RN's touch
+  // responder. Every scroll frame reschedules this; once frames stop
+  // arriving for a beat, whatever "resting" offset that timer reads is
+  // treated as settled and snapped, so the wheel can never end up idle
+  // between two days with nothing selected.
+  const idleSnapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleIdleSnap = useCallback(() => {
+    if (idleSnapTimer.current != null) clearTimeout(idleSnapTimer.current);
+    idleSnapTimer.current = setTimeout(() => {
+      idleSnapTimer.current = null;
+      snapToNearest(scrollX.value);
+    }, 120);
+    // scrollX is a shared value — a stable ref this closure always reads
+    // the latest `.value` from, not a dependency that should retrigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapToNearest]);
+
+  useEffect(() => {
+    return () => {
+      if (idleSnapTimer.current != null) clearTimeout(idleSnapTimer.current);
+    };
+  }, []);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      // eslint-disable-next-line react-hooks/immutability
+      scrollX.value = event.contentOffset.x;
+      const index = Math.round(event.contentOffset.x / ITEM_WIDTH);
+      if (index !== reportedIndex.value) {
+        reportedIndex.value = index;
+        runOnJS(reportCenterIndex)(index);
+      }
+      runOnJS(scheduleIdleSnap)();
+    },
+  });
+
   useEffect(() => {
     if (containerWidth === 0 || selectedIndex < 0) return;
     scrollTo(scrollRef, selectedIndex * ITEM_WIDTH, 0, false);
+    // eslint-disable-next-line react-hooks/immutability
     scrollX.value = selectedIndex * ITEM_WIDTH;
     // Re-sync only when the layout first measures or the selected date changes
     // from outside this component (e.g. a tap); our own settle already matches.
