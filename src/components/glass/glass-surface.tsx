@@ -29,6 +29,13 @@ export type GlassSurfaceProps = {
   bordered?: boolean;
 };
 
+// Properties that arrange *children* (as opposed to sizing/positioning the
+// surface itself) have to land on the inner content wrapper, not the outer
+// node — the outer node's only non-absolutely-positioned child is that
+// content wrapper, so a `gap`/`alignItems`/etc. set on the outer node has
+// nothing to distribute space between and silently does nothing.
+const CHILD_LAYOUT_KEYS = ['gap', 'rowGap', 'columnGap', 'flexDirection', 'alignItems', 'justifyContent', 'flexWrap'] as const;
+
 /**
  * The app's Liquid-Glass building block: a blurred, gradient-lit, hairline
  * -bordered surface used for cards, sheets, tab bars and modals. Depth is
@@ -54,6 +61,17 @@ export function GlassSurface({
 
   const shadow = LEVEL_SHADOW[level];
 
+  const flatStyle = (StyleSheet.flatten(style) ?? {}) as Record<string, unknown>;
+  const outerStyle: Record<string, unknown> = {};
+  const contentStyle: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(flatStyle)) {
+    if ((CHILD_LAYOUT_KEYS as readonly string[]).includes(key)) {
+      contentStyle[key] = value;
+    } else {
+      outerStyle[key] = value;
+    }
+  }
+
   return (
     <View
       style={[
@@ -64,7 +82,7 @@ export function GlassSurface({
           web: { boxShadow: `0px ${shadow.offsetY}px ${shadow.radius}px rgba(0,0,0,${shadow.opacity})` },
           default: null,
         }),
-        style,
+        outerStyle,
       ]}>
       <BlurView
         intensity={LEVEL_INTENSITY[level]}
@@ -97,7 +115,7 @@ export function GlassSurface({
           ]}
         />
       ) : null}
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, contentStyle]}>{children}</View>
     </View>
   );
 }

@@ -60,17 +60,20 @@ export function PlanExerciseRow({
       <View style={styles.header}>
         <CompletionToggle completed={completed} onToggle={onToggleCompleted} />
 
+        <ThemedText
+          type="smallBold"
+          numberOfLines={1}
+          style={[styles.nameText, completed ? { textDecorationLine: 'line-through' } : undefined]}>
+          {exercise.name}
+        </ThemedText>
+
         {media ? (
           <Image source={{ uri: media.gifUrl }} style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
         ) : (
           <View style={[styles.thumb, { backgroundColor: theme.backgroundElement }]} />
         )}
 
-        <View style={styles.infoColumn}>
-          <ThemedText type="smallBold" style={completed ? { textDecorationLine: 'line-through' } : undefined}>
-            {exercise.name}
-          </ThemedText>
-        </View>
+        <View style={styles.headerSpacer} />
 
         <Pressable onPress={() => setInfoOpen(true)} hitSlop={8} style={styles.iconButton}>
           <Icon name="info" size={20} color={theme.textSecondary} />
@@ -160,7 +163,7 @@ function CompletionToggle({ completed, onToggle }: { completed: boolean; onToggl
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <Pressable onPress={onToggle} hitSlop={8} style={styles.checkButton}>
+    <Pressable onPress={onToggle} hitSlop={8}>
       <Animated.View
         style={[
           styles.checkCircle,
@@ -183,11 +186,8 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.two,
-  },
-  checkButton: {
-    paddingTop: 2,
   },
   checkCircle: {
     width: 30,
@@ -197,14 +197,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  nameText: {
+    flexShrink: 1,
+  },
   thumb: {
     width: 48,
     height: 48,
     borderRadius: Radius.medium,
   },
-  infoColumn: {
+  headerSpacer: {
     flex: 1,
-    justifyContent: 'center',
   },
   iconButton: {
     padding: 4,
