@@ -26,7 +26,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated && !PUBLIC_ROUTES.has(pathname)) {
     return <Redirect href="/welcome" />;
   }
-  if (isAuthenticated && !hasOnboarded && pathname !== '/onboarding') {
+  // The post-questionnaire summary/celebration/roadmap screens are still
+  // part of onboarding (hasOnboarded flips true only at the very end).
+  if (isAuthenticated && !hasOnboarded && !pathname.startsWith('/onboarding')) {
     return <Redirect href="/onboarding" />;
   }
 
@@ -49,6 +51,8 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
           <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="onboarding-created" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="onboarding-roadmap" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
           <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
         </Stack>
