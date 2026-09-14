@@ -201,6 +201,11 @@ export default function HomeScreen() {
   const weekEatenSoFar = weekDays.filter((d) => d.hasHappened).reduce((sum, d) => sum + d.eatenKcal, 0);
   const weekDeficit = weekBurnedSoFar - weekEatenSoFar;
   const todayDeficit = todayBurn ? todayBurn.burnedKcal - todayBurn.eatenKcal : 0;
+  // What eating exactly the plan's daily calorie target across every
+  // planned day this week would add up to — negative for a deficit plan,
+  // positive for a surplus one. Uses each day's own estimated burn (higher
+  // on trained days) rather than a flat TDEE.
+  const weeklyDeficitGoal = weekDays.reduce((sum, d) => sum + (calorieTarget - d.burnedKcal), 0);
 
   // Every exercise appearing anywhere in the plan (same de-duplication
   // training-progress.tsx uses), so "recent" lifts aren't limited to today.
@@ -347,6 +352,8 @@ export default function HomeScreen() {
             eatenColor={theme.success}
             deficitColor={theme.calorieDeficit}
             surplusColor={theme.calorieSurplus}
+            weeklyDeficitGoal={weeklyDeficitGoal}
+            goalColor={theme.textSecondary}
             trackColor={theme.backgroundElement}
             axisColor={theme.textTertiary}
             todayBadgeColor={theme.accent}

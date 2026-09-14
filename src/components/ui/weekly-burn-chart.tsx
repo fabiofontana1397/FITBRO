@@ -28,6 +28,11 @@ export type WeeklyBurnChartProps = {
   surplusColor: string;
   /** Bar color on a deficit day (burned more than ate) — grows downward, below zero. */
   deficitColor: string;
+  /** The week's target deficit/surplus in kcal, same eaten-minus-burned sign
+   * convention as the bars (negative = a deficit goal) — drawn as a dashed
+   * reference line at that goal's daily-average height. */
+  weeklyDeficitGoal: number;
+  goalColor: string;
   trackColor: string;
   axisColor: string;
   todayBadgeColor: string;
@@ -62,17 +67,18 @@ type Bar = {
   labelY: number;
 };
 
-function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
-  if (plotWidth <= 0 || days.length === 0) return { bars: [] as Bar[], zeroY: height / 2, maxLabel: '0' };
+function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number, weeklyDeficitGoal: number) {
+  const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
+  const halfHeight = plotHeight / 2;
+  const zeroY = PADDING_TOP + halfHeight;
+  const dailyGoal = weeklyDeficitGoal / Math.max(days.length, 1);
+  if (plotWidth <= 0 || days.length === 0) return { bars: [] as Bar[], zeroY, maxLabel: '0', goalY: zeroY };
 
   // Surplus (ate more than burned) is positive and grows up from zero;
   // deficit (burned more than ate) is negative and grows down from zero.
   const deltas = days.map((d) => (d.hasHappened ? d.eatenKcal - d.burnedKcal : null));
-  const max = Math.max(...deltas.filter((d): d is number => d != null).map((d) => Math.abs(d)), 1);
+  const max = Math.max(...deltas.filter((d): d is number => d != null).map((d) => Math.abs(d)), Math.abs(dailyGoal), 1);
 
-  const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
-  const halfHeight = plotHeight / 2;
-  const zeroY = PADDING_TOP + halfHeight;
   const colWidth = plotWidth / days.length;
   const barWidth = Math.max(10, Math.min(22, colWidth * 0.5));
 
@@ -92,7 +98,10 @@ function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
     };
   });
 
-  return { bars, zeroY, maxLabel: `${Math.round(max)}` };
+  const goalH = (Math.abs(dailyGoal) / max) * halfHeight;
+  const goalY = dailyGoal >= 0 ? zeroY - goalH : zeroY + goalH;
+
+  return { bars, zeroY, maxLabel: `${Math.round(max)}`, goalY };
 }
 
 /** A week-at-a-glance card, always showing Monday-Sunday of the current
@@ -107,6 +116,8 @@ export function WeeklyBurnChart({
   eatenColor,
   surplusColor,
   deficitColor,
+  weeklyDeficitGoal,
+  goalColor,
   trackColor,
   axisColor,
   todayBadgeColor,
@@ -122,7 +133,7 @@ export function WeeklyBurnChart({
   const plotWidth = Math.max(containerWidth - GUTTER_WIDTH, 0);
   const colWidth = plotWidth / Math.max(days.length, 1);
 
-  const { bars, zeroY, maxLabel } = buildBars(days, plotWidth, height);
+  const { bars, zeroY, maxLabel, goalY } = buildBars(days, plotWidth, height, weeklyDeficitGoal);
 
   const onLayout = (e: LayoutChangeEvent) => {
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
@@ -167,6 +178,7 @@ export function WeeklyBurnChart({
               <View style={{ width: plotWidth, height }}>
                 <Svg width={plotWidth} height={height}>
                   <Line x1={0} y1={zeroY} x2={plotWidth} y2={zeroY} stroke={trackColor} strokeWidth={1} />
+                  <Line x1={0} y1={goalY} x2={plotWidth} y2={goalY} stroke={goalColor} strokeWidth={1.5} strokeDasharray="5 5" />
                   {bars.map((bar, i) =>
                     bar.delta != null ? (
                       <Rect
@@ -201,6 +213,23 @@ export function WeeklyBurnChart({
                     </Text>
                   ) : null
                 )}
+
+                {/* Weekly deficit/surplus goal — a dashed reference line at
+                    its daily-average height, labeled with the full weekly
+                    figure it adds up to. */}
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    position: 'absolute',
+                    left: 4,
+                    top: Math.max(Math.min(goalY - 14, height - 14), 0),
+                    fontSize: 9,
+                    fontWeight: '700',
+                    color: goalColor,
+                  }}>
+                  Obiettivo {weeklyDeficitGoal >= 0 ? '+' : ''}
+                  {Math.round(weeklyDeficitGoal)} kcal/sett.
+                </Text>
               </View>
 
               <View style={{ flexDirection: 'row', width: plotWidth }}>
