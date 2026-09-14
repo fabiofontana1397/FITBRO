@@ -1,4 +1,5 @@
 import * as Print from 'expo-print';
+import { Platform } from 'react-native';
 
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 
@@ -8,9 +9,46 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** expo-print's web shim ignores the `html` it's given entirely and just
+ * calls `window.print()` on the current page — so on web a caller would
+ * silently get a screenshot of the live app instead of the generated
+ * document. Open the document in its own window and print *that* instead. */
+async function printHtmlDocument(html: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Impossibile aprire la finestra di stampa (popup bloccato).');
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    // Give the new document a moment to lay out before invoking print —
+    // calling it synchronously can print a still-blank page in some browsers.
+    setTimeout(() => printWindow.print(), 250);
+    return;
+  }
+  await Print.printAsync({ html });
+}
+
+const BRAND_STYLE = `
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
+  .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; color: #16171b; }
+  .brand-mark .accent { color: #FF5A1F; }
+  .brand-tagline { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
+`;
+
+const BRAND_HTML = `
+  <div class="brand">
+    <span class="brand-mark">FIT<span class="accent">BRO</span></span>
+    <span class="brand-tagline">Il tuo coach personale</span>
+  </div>
+`;
+
 const BASE_STYLE = `
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #16171b; padding: 28px; }
+  ${BRAND_STYLE}
   h1 { font-size: 22px; margin: 0 0 2px; }
   h2 { font-size: 16px; margin: 26px 0 8px; border-bottom: 2px solid #FF5A1F; padding-bottom: 6px; page-break-after: avoid; }
   h3 { font-size: 13px; margin: 14px 0 4px; page-break-after: avoid; }
@@ -29,10 +67,12 @@ function htmlShell(title: string, userName: string, meta: string, body: string):
 <html>
 <head>
 <meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
 <style>${BASE_STYLE}</style>
 </head>
 <body>
-  <h1>FITBRO — ${escapeHtml(title)}</h1>
+  ${BRAND_HTML}
+  <h1>${escapeHtml(title)}</h1>
   <div class="meta">${escapeHtml(userName)} · ${escapeHtml(meta)}</div>
   ${body}
   <div class="footer">Generato da FITBRO. Il piano si aggiorna nel tempo in base ai tuoi progressi reali.</div>
@@ -69,9 +109,14 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
     .join('');
 
   const goalLabel = labelFor(findQuestion('goal'), plan.goal) ?? plan.goal;
-  const html = htmlShell('Piano alimentare', userName, `${plan.durationMonths} mesi · Obiettivo: ${goalLabel}`, monthsHtml);
+  const html = htmlShell(
+    `Piano alimentare di ${userName}`,
+    userName,
+    `${plan.durationMonths} mesi · Obiettivo: ${goalLabel}`,
+    monthsHtml
+  );
 
-  await Print.printAsync({ html });
+  await printHtmlDocument(html);
 }
 
 export type TrainingPlanPdfRow = {
@@ -109,6 +154,7 @@ function describeTempo(tempo: string): string {
 const TRAINING_STYLE = `
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #16171b; padding: 28px; }
+  ${BRAND_STYLE}
   h1 { font-size: 22px; margin: 0 0 2px; }
   .meta { font-size: 11px; color: #666; margin-bottom: 4px; }
   .goal { font-size: 12px; color: #333; margin-bottom: 18px; }
@@ -142,14 +188,17 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
     })
     .join('');
 
+  const title = `Piano di allenamento di ${input.userName}`;
   const html = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
 <style>${TRAINING_STYLE}</style>
 </head>
 <body>
-  <h1>Piano di allenamento di ${escapeHtml(input.userName)}</h1>
+  ${BRAND_HTML}
+  <h1>${escapeHtml(title)}</h1>
   <div class="meta">Durata piano totale: ${input.totalMonths} mesi</div>
   <div class="goal">${escapeHtml(input.goalNote)}</div>
   <h2>${escapeHtml(input.monthTitle)}</h2>
@@ -162,5 +211,5 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
 </body>
 </html>`;
 
-  await Print.printAsync({ html });
+  await printHtmlDocument(html);
 }
