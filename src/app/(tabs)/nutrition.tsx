@@ -12,15 +12,18 @@ import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { MonthProgressBar } from '@/components/ui/month-progress-bar';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
+import { PlanTimeline } from '@/components/training/plan-timeline';
 import { Radius, Spacing } from '@/constants/theme';
 import { TimingSlow } from '@/constants/motion';
 import { useStoreHydrated } from '@/hooks/use-store-hydrated';
 import { useTheme } from '@/hooks/use-theme';
 import { addDaysISO, currentWeekDates, daysAgoISO } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
+import { currentMonthIndex, currentMonthProgress } from '@/lib/planning/plan-progress';
 import {
   entriesForSlot,
   loggingStreakInfo,
@@ -66,6 +69,10 @@ export default function NutritionScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dietPlan, planStoreHydrated, onboardingHydrated, userStoreHydrated]);
 
+  const monthIndex = dietPlan ? currentMonthIndex(dietPlan) : 1;
+  const currentMonthData = dietPlan?.months.find((m) => m.monthIndex === monthIndex);
+  const monthProgress = dietPlan ? currentMonthProgress(dietPlan) : null;
+
   const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
   const loggedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
   const streakInfo = useMemo(() => loggingStreakInfo(entries), [entries]);
@@ -93,6 +100,50 @@ export default function NutritionScreen() {
   return (
     <ScreenScroll>
       <ScreenHeader eyebrow="Bilancio energetico" title="Nutrizione" />
+
+      <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.five, gap: Spacing.four }}>
+        {dietPlan ? (
+          <>
+            <View style={{ gap: 2 }}>
+              <ThemedText type="subtitle">Piano alimentare di {currentUser.name}</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Durata piano totale: {dietPlan.durationMonths} mesi
+              </ThemedText>
+            </View>
+
+            <PlanTimeline
+              totalMonths={dietPlan.durationMonths}
+              currentMonth={monthIndex}
+              selectedMonth={monthIndex}
+              onSelectMonth={() => router.push('/diet-plan')}
+            />
+
+            {currentMonthData && monthProgress ? (
+              <View style={{ gap: Spacing.two }}>
+                <ThemedText type="smallBold">{currentMonthData.title}</ThemedText>
+                <MonthProgressBar fraction={monthProgress.fraction} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Giorno {monthProgress.dayInMonth} di 30
+                </ThemedText>
+              </View>
+            ) : null}
+
+            <PrimaryButton
+              variant="ghost"
+              label="Mostra piano"
+              icon="chevronRight"
+              onPress={() => router.push('/diet-plan')}
+            />
+          </>
+        ) : (
+          <View style={{ gap: Spacing.two }}>
+            <ThemedText type="smallBold">Nessun piano generato</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Rifai il questionario in modalità “Piano alimentare” o “Entrambi” per generarne uno.
+            </ThemedText>
+          </View>
+        )}
+      </GlassSurface>
 
       <Animated.View style={heroAnimatedStyle}>
         <GlassSurface level="raised" radius={Radius.xlarge} style={styles.overviewCard}>
@@ -135,30 +186,6 @@ export default function NutritionScreen() {
           </View>
         </GlassSurface>
       </Animated.View>
-
-      <View>
-        <SectionHeader title="Il tuo piano nutrizionale" />
-        <GlassSurface level="card" radius={Radius.large} style={styles.planCard}>
-          {dietPlan ? (
-            <>
-              <View style={{ flex: 1, gap: 2 }}>
-                <ThemedText type="smallBold">Piano di {dietPlan.durationMonths} mesi, {dietPlan.months.length} fasi</ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {dietPlan.months[0].title}: {dietPlan.months[0].focusNote}
-                </ThemedText>
-              </View>
-              <PrimaryButton label="Vedi piano" onPress={() => router.push('/diet-plan')} style={styles.planButton} />
-            </>
-          ) : (
-            <View style={{ flex: 1, gap: 2 }}>
-              <ThemedText type="smallBold">Nessun piano generato</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Rifai il questionario in modalità “Piano alimentare” o “Entrambi” per generarne uno.
-              </ThemedText>
-            </View>
-          )}
-        </GlassSurface>
-      </View>
 
       <View>
         <SectionHeader title="I tuoi pasti" />
@@ -251,15 +278,6 @@ function MacroStat({ label, value, suffix = 'g' }: { label: string; value: numbe
 }
 
 const styles = StyleSheet.create({
-  planCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-  },
-  planButton: {
-    flexShrink: 0,
-  },
   overviewCard: {
     padding: Spacing.four,
     gap: Spacing.four,

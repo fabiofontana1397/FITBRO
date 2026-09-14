@@ -1,19 +1,18 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { MonthProgressBar } from '@/components/ui/month-progress-bar';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SectionHeader } from '@/components/ui/section-header';
 import { DayWheel } from '@/components/training/day-wheel';
 import { PlanExerciseRow } from '@/components/training/plan-exercise-row';
 import { PlanTimeline } from '@/components/training/plan-timeline';
-import { TimingSlow } from '@/constants/motion';
 import { Radius, Spacing } from '@/constants/theme';
 import { useStoreHydrated } from '@/hooks/use-store-hydrated';
 import { useTheme } from '@/hooks/use-theme';
@@ -202,35 +201,9 @@ export default function TrainingScreen() {
   );
 }
 
-function MonthProgressBar({ fraction }: { fraction: number }) {
-  const theme = useTheme();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withDelay(150, withTiming(fraction, TimingSlow));
-  }, [fraction, progress]);
-
-  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
-
-  return (
-    <View style={[styles.progressTrack, { backgroundColor: theme.backgroundElement }]}>
-      <Animated.View style={[styles.progressFill, { backgroundColor: theme.accent }, fillStyle]} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   monthYearLabel: {
     textAlign: 'center',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
   },
   dayCard: {
     alignItems: 'center',
