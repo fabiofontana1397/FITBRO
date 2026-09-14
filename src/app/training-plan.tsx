@@ -8,11 +8,12 @@ import { PlanTimeline } from '@/components/training/plan-timeline';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { MonthProgressBar } from '@/components/ui/month-progress-bar';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getExerciseMedia } from '@/lib/exercise-media/exercise-media';
 import { exportTrainingPlanPdf, type TrainingPlanPdfRow } from '@/lib/planning/pdf-export';
-import { currentMonthIndex } from '@/lib/planning/plan-progress';
+import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
@@ -34,6 +35,7 @@ export default function TrainingPlanScreen() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthIdx);
   const selectedMonthData = plan?.months.find((m) => m.monthIndex === selectedMonth);
   const isUnlocked = selectedMonth <= currentMonthIdx;
+  const progress = plan ? monthProgress(plan, selectedMonth) : null;
 
   const dayGroups: DayGroup[] = useMemo(() => {
     if (!selectedMonthData) return [];
@@ -168,6 +170,15 @@ export default function TrainingPlanScreen() {
               <ThemedText type="subtitle">{selectedMonthData.title}</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 {selectedMonthData.focusNote}
+              </ThemedText>
+            </View>
+          ) : null}
+
+          {isUnlocked && progress ? (
+            <View style={{ gap: Spacing.two }}>
+              <MonthProgressBar fraction={progress.fraction} />
+              <ThemedText type="caption" themeColor="textSecondary">
+                Giorno {progress.dayInMonth} di 30
               </ThemedText>
             </View>
           ) : null}

@@ -26,3 +26,17 @@ export function currentMonthProgress(plan: { generatedAt: string; durationMonths
     fraction: Math.min(1, Math.max(0, clampedDays / 30)),
   };
 }
+
+/** Same "day X of 30" progress, but for whichever month the user is
+ * currently browsing in the plan detail screens (training-plan.tsx /
+ * diet-plan.tsx) rather than always the live current one — already-
+ * completed months read as fully done, months not reached yet as untouched. */
+export function monthProgress(
+  plan: { generatedAt: string; durationMonths: number },
+  monthIndex: number
+): { dayInMonth: number; fraction: number } {
+  const current = currentMonthIndex(plan);
+  if (monthIndex < current) return { dayInMonth: 30, fraction: 1 };
+  if (monthIndex > current) return { dayInMonth: 0, fraction: 0 };
+  return currentMonthProgress(plan);
+}
