@@ -62,17 +62,6 @@ export function formatFullDay(iso: string, locale = 'it-IT'): string {
   return new Date(iso).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-/** 0-indexed week-of-month bucket (0 = the 1st-7th, 1 = 8th-14th, ...). */
-export function weekOfMonthIndex(date: Date): number {
-  return Math.floor((date.getDate() - 1) / 7);
-}
-
-/** How many week buckets the given month needs (4 or 5). */
-export function weeksInMonth(year: number, monthIndex0: number): number {
-  const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
-  return weekOfMonthIndex(new Date(year, monthIndex0, lastDay)) + 1;
-}
-
 export function monthShortLabel(year: number, monthIndex0: number, locale = 'it-IT'): string {
   const label = new Date(year, monthIndex0, 1).toLocaleDateString(locale, { month: 'short' }).replace('.', '');
   return label.charAt(0).toUpperCase() + label.slice(1);

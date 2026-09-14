@@ -17,7 +17,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
-import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekOfMonthIndex, weekdayShort, weeksInMonth } from '@/lib/mock/dates';
+import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekdayShort } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
 import { estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
@@ -97,12 +97,12 @@ export default function HomeScreen() {
   const startBody = bodyEntries[0];
   const doneSoFar = startBody.weightKg - latestBody.weightKg;
 
-  // Day/week/month/year switches which fixed set of axis slots the chart
-  // shows — hours of today, days of this week, weeks of this month, months
-  // of this year — each slot keeping its gridline/label even when nothing
-  // was logged for it yet, so the axes always read as a complete chart
-  // rather than only appearing once data exists.
-  const [weightRange, setWeightRange] = useState<'giorno' | 'settimana' | 'mese' | 'anno'>('giorno');
+  // Week/month/year switches which fixed set of axis slots the chart shows
+  // — days of this week, days of this month, months of this year — each
+  // slot keeping its gridline/label even when nothing was logged for it
+  // yet, so the axes always read as a complete chart rather than only
+  // appearing once data exists.
+  const [weightRange, setWeightRange] = useState<'settimana' | 'mese' | 'anno'>('settimana');
   const weightSeries = useMemo<WeightPoint[]>(() => {
     const byDate = new Map<string, number[]>();
     for (const e of bodyEntries) {
@@ -118,14 +118,6 @@ export default function HomeScreen() {
 
     const now = new Date();
 
-    if (weightRange === 'giorno') {
-      const HOURS = [0, 4, 8, 12, 16, 20];
-      const todayValue = avgFor(daysAgoISO(0));
-      const currentHour = now.getHours();
-      const activeIndex = HOURS.reduce((best, h, i) => (h <= currentHour ? i : best), 0);
-      return HOURS.map((h, i) => ({ xLabel: `${h.toString().padStart(2, '0')}`, value: i === activeIndex ? todayValue : null }));
-    }
-
     if (weightRange === 'settimana') {
       return currentWeekDates(now).map((date) => ({ xLabel: weekdayShort(date), value: avgFor(date) }));
     }
@@ -133,19 +125,11 @@ export default function HomeScreen() {
     if (weightRange === 'mese') {
       const year = now.getFullYear();
       const month = now.getMonth();
-      const bucketCount = weeksInMonth(year, month);
-      const sums = Array.from({ length: bucketCount }, () => ({ sum: 0, count: 0 }));
-      for (const [date, values] of byDate) {
-        const d = new Date(date);
-        if (d.getFullYear() !== year || d.getMonth() !== month) continue;
-        const bucket = sums[weekOfMonthIndex(d)];
-        bucket.sum += values.reduce((sum, v) => sum + v, 0);
-        bucket.count += values.length;
-      }
-      return sums.map((bucket, i) => ({
-        xLabel: `Sett ${i + 1}`,
-        value: bucket.count > 0 ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null,
-      }));
+      const dayCount = new Date(year, month + 1, 0).getDate();
+      return Array.from({ length: dayCount }, (_, i) => {
+        const date = `${year}-${(month + 1).toString().padStart(2, '0')}-${(i + 1).toString().padStart(2, '0')}`;
+        return { xLabel: `${i + 1}`, value: avgFor(date) };
+      });
     }
 
     // anno
@@ -250,7 +234,6 @@ export default function HomeScreen() {
         <GlassSurface level="card" radius={Radius.large} style={styles.goalCard}>
           <SegmentedControl
             options={[
-              { value: 'giorno', label: 'Giorno' },
               { value: 'settimana', label: 'Settimana' },
               { value: 'mese', label: 'Mese' },
               { value: 'anno', label: 'Anno' },
