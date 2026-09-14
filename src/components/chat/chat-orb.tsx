@@ -1,65 +1,96 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
-/** A small "living" AI entity — two gradient layers drifting and rotating
- * against each other inside a circular mask, standing in for a literal
- * chat-bubble icon on the coach FAB. Continuous and seamless (each loop
- * drives a full 360° turn, so there's no jump cut), never settling into a
- * static image. */
+type Petal = { colors: [string, string]; duration: number; direction: 1 | -1; baseAngle: number; width: number; height: number };
+
+// Three overlapping "petals" at 0/120/240° like a flower, each its own hue,
+// each spinning at its own speed/direction — the interference between them
+// (not a single rotating image) is what reads as a living plasma sphere,
+// closest to the reference photo's swirling multi-color core.
+const PETALS: Petal[] = [
+  { colors: ['#FF3B6E', '#FF9AA8'], duration: 9000, direction: 1, baseAngle: 0, width: 0.95, height: 0.56 },
+  { colors: ['#18E0B8', '#0BA37A'], duration: 13000, direction: -1, baseAngle: 120, width: 0.95, height: 0.56 },
+  { colors: ['#3D5AFE', '#9B4DFF'], duration: 16000, direction: 1, baseAngle: 240, width: 0.95, height: 0.56 },
+];
+
+/** A small "living" AI entity standing in for a literal chat-bubble icon:
+ * a dark glass sphere with three colored petals swirling independently
+ * around a pulsing white core, never settling into a static image. */
 export function ChatOrb({ size }: { size: number }) {
-  const spinA = useSharedValue(0);
-  const spinB = useSharedValue(0);
-  const breathe = useSharedValue(0);
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#0b0c1e' }}>
+      {PETALS.map((petal, i) => (
+        <PetalLayer key={i} petal={petal} size={size} />
+      ))}
+      <CoreGlow size={size} />
+      <View
+        pointerEvents="none"
+        style={[styles.rim, { borderRadius: size / 2, borderColor: 'rgba(255,255,255,0.28)' }]}
+      />
+    </View>
+  );
+}
+
+function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
+  const spin = useSharedValue(0);
 
   useEffect(() => {
-    spinA.value = withRepeat(withTiming(1, { duration: 7000, easing: Easing.linear }), -1, false);
-    spinB.value = withRepeat(withTiming(1, { duration: 11000, easing: Easing.linear }), -1, false);
-    breathe.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true);
-  }, [spinA, spinB, breathe]);
+    spin.value = withRepeat(withTiming(1, { duration: petal.duration, easing: Easing.linear }), -1, false);
+  }, [spin, petal.duration]);
 
-  const layerAStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${spinA.value * 360}deg` },
-      { translateX: interpolate(breathe.value, [0, 1], [-size * 0.06, size * 0.06]) },
-    ],
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${petal.baseAngle + petal.direction * spin.value * 360}deg` }],
   }));
-  const layerBStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(breathe.value, [0, 1], [0.7, 1]),
-    transform: [
-      { rotate: `${-spinB.value * 360}deg` },
-      { translateY: interpolate(breathe.value, [0, 1], [size * 0.05, -size * 0.05]) },
-    ],
-  }));
-  const highlightStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(breathe.value, [0, 1], [0.18, 0.32]),
-    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.94, 1.04]) }],
-  }));
-
-  const layerSize = size * 1.7;
-  const layerOffset = -(layerSize - size) / 2;
 
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}>
-      <Animated.View style={[styles.layer, layerAStyle]}>
-        <LinearGradient
-          colors={['#FF8A3D', '#FF5A1F', '#B23BFF']}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={{ width: layerSize, height: layerSize, marginLeft: layerOffset, marginTop: layerOffset, borderRadius: layerSize / 2 }}
-        />
-      </Animated.View>
-      <Animated.View style={[styles.layer, layerBStyle]}>
-        <LinearGradient
-          colors={['#3DD6FF', '#FF5A1F', '#FFD23D']}
-          start={{ x: 1, y: 0.1 }}
-          end={{ x: 0, y: 0.9 }}
-          style={{ width: layerSize * 0.9, height: layerSize * 0.9, marginLeft: layerOffset, marginTop: layerOffset, borderRadius: layerSize / 2 }}
-        />
-      </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.highlight, { width: size, height: size, borderRadius: size / 2 }, highlightStyle]} />
-    </View>
+    <Animated.View style={[styles.layer, style]}>
+      <LinearGradient
+        colors={petal.colors}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{
+          width: size * petal.width,
+          height: size * petal.height,
+          borderRadius: (size * petal.height) / 2,
+          opacity: 0.78,
+        }}
+      />
+    </Animated.View>
+  );
+}
+
+function CoreGlow({ size }: { size: number }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [pulse]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.75, 1]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.85, 1.05]) }],
+  }));
+
+  const coreSize = size * 0.42;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.layer,
+        style,
+        {
+          shadowColor: '#ffffff',
+          shadowOpacity: 0.9,
+          shadowRadius: coreSize * 0.6,
+          shadowOffset: { width: 0, height: 0 },
+        },
+        Platform.select({ web: { boxShadow: `0 0 ${coreSize * 0.7}px rgba(255,255,255,0.85)` } as object, default: null }),
+      ]}>
+      <View style={{ width: coreSize, height: coreSize, borderRadius: coreSize / 2, backgroundColor: '#ffffff' }} />
+    </Animated.View>
   );
 }
 
@@ -73,10 +104,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  highlight: {
+  rim: {
     position: 'absolute',
     top: 0,
     left: 0,
-    backgroundColor: '#ffffff',
+    right: 0,
+    bottom: 0,
+    borderWidth: 1,
   },
 });
