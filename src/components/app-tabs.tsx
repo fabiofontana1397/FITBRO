@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps } from 'expo-router/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -74,6 +74,7 @@ function FloatingTabBar({
 }) {
   const insets = useSafeAreaInsets();
   const [barHeight, setBarHeight] = useState<number | null>(null);
+  const lastReportedHeight = useRef<number | null>(null);
 
   return (
     <View
@@ -88,7 +89,16 @@ function FloatingTabBar({
           radius={Radius.xlarge}
           style={styles.bar}
           onLayout={(e) => {
+            // The row re-measures on every tab switch (the focused
+            // TabButton's own layout shifts slightly), which can report a
+            // height a fraction of a pixel off the last one purely from
+            // sub-pixel rounding. Propagating that non-change downstream
+            // used to re-render ChatFab/ChatOrb on every navigation, which
+            // read as the orb's colors "changing" when a tab was tapped —
+            // so only report height changes big enough to be real.
             const height = e.nativeEvent.layout.height;
+            if (lastReportedHeight.current != null && Math.abs(height - lastReportedHeight.current) < 1) return;
+            lastReportedHeight.current = height;
             setBarHeight(height);
             onBarHeightChange?.(height);
           }}>

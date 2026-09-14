@@ -68,7 +68,7 @@ export function ChatOrb({ size }: { size: number }) {
         ))}
       </Animated.View>
       <BlurView
-        intensity={Platform.OS === 'web' ? 16 : 26}
+        intensity={Platform.OS === 'web' ? 7 : 11}
         tint="light"
         style={StyleSheet.absoluteFill}
         blurMethod="dimezisBlurViewSdk31Plus"
@@ -131,7 +131,7 @@ function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
   // How far the blob's own center wanders from the sphere's center — a
   // true Lissajous path (different X/Y frequency), not a fixed-radius
   // circular orbit, so it drifts and mixes rather than just spinning.
-  const orbitRadius = size * 0.34;
+  const orbitRadius = size * 0.42;
 
   const style = useAnimatedStyle(() => {
     const angle = orbit.value * Math.PI * 2 * petal.direction + petal.phase;
@@ -147,7 +147,13 @@ function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
     };
   });
 
-  const blobSize = size * 0.9;
+  // Previously ~0.9× the sphere — at that size every petal covered nearly
+  // the whole circle at all times, so wandering barely changed what was
+  // visible, and the (much stronger) old blur then smeared what little
+  // changed into a near-static average. Smaller blobs + a wider orbit
+  // radius above mean each petal actually uncovers/reveals the sphere
+  // behind it as it wanders, so the color mixing reads as real movement.
+  const blobSize = size * 0.6;
 
   return (
     <Animated.View style={[styles.layer, style]}>
