@@ -304,38 +304,39 @@ export default function HomeScreen() {
         </GlassSurface>
 
         <GlassSurface level="card" radius={Radius.large} style={styles.burnCard}>
-          <View style={{ gap: 2 }}>
-            <View style={styles.burnHeaderRow}>
-              <ThemedText type="smallBold">Calorie bruciate e assunte</ThemedText>
-              <View style={[styles.weekDeltaChip, { backgroundColor: (weekDeficit >= 0 ? theme.success : theme.danger) + '26' }]}>
-                <ThemedText type="caption" style={{ color: weekDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
-                  {weekDeficit >= 0 ? '+' : ''}
-                  {Math.round(weekDeficit)} kcal/sett.
-                </ThemedText>
-              </View>
-            </View>
-            <View style={styles.burnLegendRow}>
-              <View style={styles.burnLegendItem}>
-                <View style={[styles.burnLegendDot, { backgroundColor: theme.accent }]} />
+          <View style={{ gap: Spacing.two }}>
+            <ThemedText type="smallBold">Calorie bruciate e assunte</ThemedText>
+            <View style={styles.burnEmphasisRow}>
+              <View style={{ flex: 1 }}>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Bruciate
+                  Oggi
                 </ThemedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon name={todayDeficit >= 0 ? 'trendDown' : 'trendUp'} size={14} color={todayDeficit >= 0 ? theme.success : theme.danger} />
+                  <ThemedText type="subtitle" style={{ color: todayDeficit >= 0 ? theme.success : theme.danger }}>
+                    {todayDeficit >= 0 ? '-' : '+'}
+                    {Math.abs(Math.round(todayDeficit))} kcal
+                  </ThemedText>
+                </View>
               </View>
-              <View style={styles.burnLegendItem}>
-                <View style={[styles.burnLegendDot, { backgroundColor: theme.success }]} />
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Assunte
+                  Questa settimana
                 </ThemedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon name={weekDeficit >= 0 ? 'trendDown' : 'trendUp'} size={14} color={weekDeficit >= 0 ? theme.success : theme.danger} />
+                  <ThemedText type="subtitle" style={{ color: weekDeficit >= 0 ? theme.success : theme.danger }}>
+                    {weekDeficit >= 0 ? '-' : '+'}
+                    {Math.abs(Math.round(weekDeficit))} kcal
+                  </ThemedText>
+                </View>
               </View>
-              <ThemedText type="caption" style={{ marginLeft: 'auto', color: todayDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
-                Oggi {todayDeficit >= 0 ? '+' : ''}
-                {Math.round(todayDeficit)} kcal
-              </ThemedText>
             </View>
           </View>
           <WeeklyBurnChart
             days={weekDays.map((d) => ({
               label: d.label,
+              date: d.date,
               burnedKcal: d.burnedKcal,
               eatenKcal: d.eatenKcal,
               isToday: d.isToday,
@@ -344,8 +345,8 @@ export default function HomeScreen() {
             }))}
             burnedColor={theme.accent}
             eatenColor={theme.success}
-            deficitColor={theme.success}
-            surplusColor={theme.danger}
+            deficitColor={theme.calorieDeficit}
+            surplusColor={theme.calorieSurplus}
             trackColor={theme.backgroundElement}
             axisColor={theme.textTertiary}
             todayBadgeColor={theme.accent}
@@ -531,30 +532,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     padding: Spacing.four,
   },
-  burnHeaderRow: {
+  burnEmphasisRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  weekDeltaChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
-  burnLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  burnLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  burnLegendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    alignItems: 'flex-start',
   },
   ringsStack: {
     alignItems: 'center',

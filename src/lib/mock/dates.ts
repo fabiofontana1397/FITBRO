@@ -66,3 +66,20 @@ export function monthShortLabel(year: number, monthIndex0: number, locale = 'it-
   const label = new Date(year, monthIndex0, 1).toLocaleDateString(locale, { month: 'short' }).replace('.', '');
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
+
+/** "1-30 settembre" / "29 settembre - 3 ottobre" / "14 settembre" — used by
+ * any chart caption that needs to say which day-granularity slice is
+ * currently in view. */
+export function formatDayRange(startISO: string, endISO: string, locale = 'it-IT'): string {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const month = (d: Date) => d.toLocaleDateString(locale, { month: 'long' });
+
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return start.getDate() === end.getDate() ? `${start.getDate()} ${month(start)}` : `${start.getDate()}-${end.getDate()} ${month(start)}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${start.getDate()} ${month(start)} - ${end.getDate()} ${month(end)}`;
+  }
+  return `${start.getDate()} ${month(start)} ${start.getFullYear()} - ${end.getDate()} ${month(end)} ${end.getFullYear()}`;
+}

@@ -64,6 +64,12 @@ export const Colors = {
     success: '#00A651',
     warning: '#D9A600',
     danger: '#D6402C',
+    // Used only for the calorie-delta bars (surplus/deficit) on the weekly
+    // burn chart — deliberately distinct from success/danger so that bar
+    // reads as its own "delta" signal rather than duplicating the
+    // good/bad framing already carried by color elsewhere on that card.
+    calorieSurplus: '#0B72E0',
+    calorieDeficit: '#C2178E',
     tabBarBlur: 'light' as const,
     shadow: 'rgba(20,20,25,0.12)',
   },
@@ -89,6 +95,12 @@ export const Colors = {
     success: '#39FF14',
     warning: '#FFE600',
     danger: '#FF6B57',
+    // Used only for the calorie-delta bars (surplus/deficit) on the weekly
+    // burn chart — deliberately distinct from success/danger so that bar
+    // reads as its own "delta" signal rather than duplicating the
+    // good/bad framing already carried by color elsewhere on that card.
+    calorieSurplus: '#3AA0FF',
+    calorieDeficit: '#FF3FD1',
     tabBarBlur: 'dark' as const,
     shadow: 'rgba(0,0,0,0.5)',
   },

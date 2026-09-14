@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
+import { formatDayRange } from '@/lib/mock/dates';
+
 /** One axis slot (a day/week/month depending on the selected range).
  * `value` is null when nothing was logged for that slot — the slot still
  * gets its gridline/label, it just has no dot and isn't connected into the
@@ -117,21 +119,6 @@ function slotIndexAt(x: number, pointCount: number, innerWidth: number) {
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** "1-30 settembre" / "29 settembre - 3 ottobre" / "14 settembre". */
-function formatDayRange(startISO: string, endISO: string) {
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  const month = (d: Date) => d.toLocaleDateString('it-IT', { month: 'long' });
-
-  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
-    return start.getDate() === end.getDate() ? `${start.getDate()} ${month(start)}` : `${start.getDate()}-${end.getDate()} ${month(start)}`;
-  }
-  if (start.getFullYear() === end.getFullYear()) {
-    return `${start.getDate()} ${month(start)} - ${end.getDate()} ${month(end)}`;
-  }
-  return `${start.getDate()} ${month(start)} ${start.getFullYear()} - ${end.getDate()} ${month(end)} ${end.getFullYear()}`;
 }
 
 /** "Gennaio - Giugno 2026" / "Settembre 2026". */
