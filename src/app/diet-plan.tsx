@@ -7,13 +7,14 @@ import { PlanTimeline } from '@/components/training/plan-timeline';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { InsightCard } from '@/components/ui/insight-card';
 import { MonthProgressBar } from '@/components/ui/month-progress-bar';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { exportDietPlanPdf } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
 import type { DietDayPlan, PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
-import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
@@ -26,8 +27,6 @@ const PHASE_LABEL: Record<PlanPhaseKind, string> = {
 export default function DietPlanScreen() {
   const theme = useTheme();
   const plan = usePlanStore((s) => s.dietPlan);
-  const generatePlans = usePlanStore((s) => s.generatePlans);
-  const answers = useOnboardingStore((s) => s.answers);
   const currentUser = useUserStore();
   const [exporting, setExporting] = useState(false);
 
@@ -47,10 +46,6 @@ export default function DietPlanScreen() {
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleRegenerate = () => {
-    generatePlans(answers, { dailyCalorieTarget: currentUser.dailyCalorieTarget, macroTargetsG: currentUser.macroTargetsG });
   };
 
   return (
@@ -138,20 +133,12 @@ export default function DietPlanScreen() {
             </GlassSurface>
           ) : selectedMonthData ? (
             <>
-              <View style={styles.linksRow}>
-                <Pressable onPress={handleExport} disabled={exporting} style={styles.exportLink} hitSlop={8}>
-                  <Icon name="download" size={15} color={theme.textSecondary} />
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {exporting ? 'Preparazione…' : 'Scarica PDF'}
-                  </ThemedText>
-                </Pressable>
-                <Pressable onPress={handleRegenerate} style={styles.exportLink} hitSlop={8}>
-                  <Icon name="refresh" size={15} color={theme.textSecondary} />
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    Rigenera
-                  </ThemedText>
-                </Pressable>
-              </View>
+              <Pressable onPress={handleExport} disabled={exporting} style={styles.exportLink} hitSlop={8}>
+                <Icon name="download" size={15} color={theme.textSecondary} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {exporting ? 'Preparazione…' : 'Scarica PDF'}
+                </ThemedText>
+              </Pressable>
 
               <View style={styles.targetsRow}>
                 <Target label="Calorie" value={`${selectedMonthData.calorieTarget}`} unit="kcal" />
@@ -164,6 +151,30 @@ export default function DietPlanScreen() {
                 {selectedMonthData.weeklySplit.map((day) => (
                   <DayGroup key={day.weekday} day={day} />
                 ))}
+              </View>
+
+              <View>
+                <SectionHeader title="Consigli" />
+                <View style={{ gap: Spacing.two }}>
+                  <InsightCard
+                    icon="refresh"
+                    tone="neutral"
+                    headline="Sostituzioni tra proteine e grassi"
+                    body="Le fonti proteiche (pollo, tacchino, pesce, uova, legumi) e i grassi (olio EVO, frutta secca, avocado) sono intercambiabili a parità di grammi indicati, se preferisci variare rispetto a quanto proposto."
+                  />
+                  <InsightCard
+                    icon="bolt"
+                    tone="neutral"
+                    headline="Se sgarri o salti un pasto"
+                    body="Niente digiuni compensativi: alleggerisci leggermente il pasto successivo o la giornata dopo, mantenendo la regolarità dei pasti."
+                  />
+                  <InsightCard
+                    icon="alert"
+                    tone="warning"
+                    headline="Cosa evitare"
+                    body="Digiuni prolungati per compensare uno sgarro, bevande zuccherate quotidiane e fritture frequenti: rallentano i risultati più di un pasto occasionale fuori piano."
+                  />
+                </View>
               </View>
             </>
           ) : null}
@@ -282,14 +293,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  linksRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Spacing.three,
-  },
   exportLink: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-end',
     gap: 6,
   },
   targetsRow: {
