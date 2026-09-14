@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,12 +10,17 @@ import { GlassSurface } from '@/components/glass/glass-surface';
 import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { SpringSnappy } from '@/constants/motion';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 // Matches ChatFab's own DEFAULT_SIZE fallback, used before the bar's real
 // height has been measured for the very first frame.
 const DEFAULT_BAR_HEIGHT = 48;
+
+// Same total ScreenScroll already reserves as bottom padding (see
+// screen-scroll.tsx) so this mask's fade zone lines up with exactly the
+// area every screen already keeps clear for the floating bar.
+const FADE_HEIGHT = BottomTabInset + Spacing.six;
 
 const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] = [
   { name: 'index', href: '/', label: 'Oggi', icon: 'home' },
@@ -27,6 +33,7 @@ export default function AppTabs({ onBarHeightChange }: { onBarHeightChange?: (he
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
+      <ScrollFadeMask />
       <TabList asChild>
         <FloatingTabBar onBarHeightChange={onBarHeightChange}>
           {TAB_ITEMS.map((item) => (
@@ -37,6 +44,24 @@ export default function AppTabs({ onBarHeightChange }: { onBarHeightChange?: (he
         </FloatingTabBar>
       </TabList>
     </Tabs>
+  );
+}
+
+/** Fades scrolled content to the background color well before it would
+ * reach the floating bar, instead of it staying crisp and peeking through
+ * the bar's translucent glass — text only turns fully legible once the
+ * user has scrolled it above this zone, clear of the bar entirely. Sits
+ * above the screen content but below the bar itself, and never intercepts
+ * touches (the scroll view underneath keeps handling them). */
+function ScrollFadeMask() {
+  const theme = useTheme();
+  return (
+    <LinearGradient
+      pointerEvents="none"
+      colors={['transparent', theme.background]}
+      locations={[0, 0.6]}
+      style={[styles.fadeMask, { height: FADE_HEIGHT }]}
+    />
   );
 }
 
@@ -112,6 +137,12 @@ function TabButton({ label, icon, isFocused, ...props }: TabTriggerSlotProps & {
 }
 
 const styles = StyleSheet.create({
+  fadeMask: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   floatWrapper: {
     position: 'absolute',
     bottom: 0,
