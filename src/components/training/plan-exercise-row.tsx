@@ -222,6 +222,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 6,
     alignItems: 'flex-start',
+    // Anchor to the bottom like rightCol below, so whichever column has
+    // less content (e.g. a bodyweight exercise with no carico/tempo lines)
+    // doesn't leave empty space above the row's bottom edge.
+    justifyContent: 'flex-end',
   },
   targetChip: {
     paddingHorizontal: Spacing.three,
