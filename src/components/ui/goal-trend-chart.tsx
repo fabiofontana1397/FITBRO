@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
-export type WeightPoint = { date: string; value: number; xLabel: string };
+/** One axis slot (an hour/day/week/month depending on the selected range).
+ * `value` is null when nothing was logged for that slot — the slot still
+ * gets its gridline/label, it just has no dot and isn't connected into the
+ * trend line across the gap. */
+export type WeightPoint = { xLabel: string; value: number | null };
 
 export type GoalTrendChartProps = {
-  /** Chronological points for whichever range is currently selected
-   * (day/week/year) — already aggregated/labeled by the caller. */
   points: WeightPoint[];
   target: number;
   width?: number;
@@ -23,23 +25,48 @@ const PADDING_TOP = 20;
 const PADDING_BOTTOM = 22;
 const Y_TICK_COUNT = 4;
 
+type XY = { x: number; y: number; value: number };
+
+function buildSegments(xy: (XY | null)[], height: number) {
+  const segments: { path: string; area: string }[] = [];
+  let run: XY[] = [];
+
+  const flush = () => {
+    if (run.length === 0) return;
+    const path = run.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+    const area = run.length > 1 ? `${path} L ${run[run.length - 1].x.toFixed(2)} ${height} L ${run[0].x.toFixed(2)} ${height} Z` : '';
+    segments.push({ path, area });
+    run = [];
+  };
+
+  for (const pt of xy) {
+    if (pt) run.push(pt);
+    else flush();
+  }
+  flush();
+
+  return segments;
+}
+
 function buildChart(points: WeightPoint[], target: number, width: number, height: number) {
   const empty = {
-    path: '',
-    area: '',
-    xy: [] as { x: number; y: number; value: number }[],
+    segments: [] as { path: string; area: string }[],
+    xy: [] as XY[],
     targetY: height / 2,
     xTicks: [] as { x: number; label: string }[],
     yTicks: [] as { y: number; label: string }[],
   };
-  if (points.length < 2 || width <= 0) return empty;
+  if (points.length === 0 || width <= 0) return empty;
 
-  const rawValues = [...points.map((p) => p.value), target];
+  const values = points.map((p) => p.value).filter((v): v is number => v != null);
+  const rawValues = [...values, target];
   const rawMin = Math.min(...rawValues);
   const rawMax = Math.max(...rawValues);
   // A little headroom above/below so dots and their value labels near the
-  // extremes never sit flush against the plot edge.
-  const pad = (rawMax - rawMin) * 0.15 || 1;
+  // extremes never sit flush against the plot edge. When there's no logged
+  // data at all yet, fall back to a fixed envelope around the target so the
+  // axes still read as a real chart rather than a flat line.
+  const pad = values.length === 0 ? 3 : Math.max((rawMax - rawMin) * 0.15, 0.5);
   const min = rawMin - pad;
   const max = rawMax + pad;
   const valueRange = max - min || 1;
@@ -47,39 +74,39 @@ function buildChart(points: WeightPoint[], target: number, width: number, height
   const plotWidth = width - PADDING_LEFT - PADDING_RIGHT;
   const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
 
-  // Points are evenly spaced by index rather than by actual elapsed time:
-  // real-world weigh-ins are logged irregularly (daily near "oggi", sparser
-  // further back), and a time-proportional axis would bunch closely-logged
-  // points together and collide their labels. Each point already represents
-  // one category slot (a day/week/month), so a categorical axis reads better.
+  // Slots are evenly spaced by index rather than by actual elapsed time:
+  // each point is already one fixed axis category (an hour/day/week/month),
+  // not a raw timestamp, so a categorical axis is what actually matches the
+  // labels underneath it.
   const toX = (i: number) => (points.length === 1 ? PADDING_LEFT + plotWidth / 2 : PADDING_LEFT + (i / (points.length - 1)) * plotWidth);
   const toY = (value: number) => PADDING_TOP + plotHeight * (1 - (value - min) / valueRange);
 
-  const xy = points.map((p, i) => ({ x: toX(i), y: toY(p.value), value: p.value }));
-  const path = xy.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
-  const area = `${path} L ${xy[xy.length - 1].x.toFixed(2)} ${height} L ${xy[0].x.toFixed(2)} ${height} Z`;
+  const xy = points.map((p, i) => (p.value == null ? null : { x: toX(i), y: toY(p.value), value: p.value }));
+  const segments = buildSegments(xy, height);
 
-  const xTicks = points.map((p, i) => ({ x: xy[i].x, label: p.xLabel }));
+  const xTicks = points.map((p, i) => ({ x: toX(i), label: p.xLabel }));
   const yTicks = Array.from({ length: Y_TICK_COUNT }, (_, i) => {
     const value = min + (valueRange * i) / (Y_TICK_COUNT - 1);
     return { y: toY(value), label: value.toFixed(1) };
   }).reverse();
 
-  return { path, area, xy, targetY: toY(target), xTicks, yTicks };
+  return { segments, xy: xy.filter((p): p is XY => p != null), targetY: toY(target), xTicks, yTicks };
 }
 
 /** A weight trend chart matching the familiar Health-app look: horizontal
  * gridlines with value labels, vertical dashed gridlines per x tick, a
  * solid trend line with a value label at every dot (not just the last),
- * and the target as its own reference line. Axis/value labels are plain
- * React Native Text absolutely positioned over the SVG rather than SVG
- * <Text> — the latter's baseline handling isn't consistent enough across
- * web/iOS/Android to trust for something this small. */
+ * and the target as its own reference line. The axis grid always renders,
+ * even for slots with nothing logged yet, so the chart never looks broken
+ * before there's data. Axis/value labels are plain React Native Text
+ * absolutely positioned over the SVG rather than SVG <Text> — the latter's
+ * baseline handling isn't consistent enough across web/iOS/Android to trust
+ * for something this small. */
 export function GoalTrendChart({ points, target, width, height = 240, color, targetColor, axisColor, gridColor }: GoalTrendChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const chartWidth = width ?? measuredWidth;
 
-  const { path, area, xy, targetY, xTicks, yTicks } = useMemo(() => buildChart(points, target, chartWidth, height), [points, target, chartWidth, height]);
+  const { segments, xy, targetY, xTicks, yTicks } = useMemo(() => buildChart(points, target, chartWidth, height), [points, target, chartWidth, height]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
@@ -101,7 +128,7 @@ export function GoalTrendChart({ points, target, width, height = 240, color, tar
             {yTicks.map((tick, i) => (
               <Line key={`y${i}`} x1={PADDING_LEFT} y1={tick.y} x2={chartWidth - PADDING_RIGHT} y2={tick.y} stroke={gridColor} strokeWidth={1} />
             ))}
-            {/* Vertical dashed gridlines, one per point */}
+            {/* Vertical dashed gridlines, one per axis slot */}
             {xTicks.map((tick, i) => (
               <Line
                 key={`x${i}`}
@@ -126,8 +153,10 @@ export function GoalTrendChart({ points, target, width, height = 240, color, tar
               strokeDasharray="5 5"
             />
 
-            {area ? <Path d={area} fill="url(#goalTrendFill)" /> : null}
-            {path ? <Path d={path} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+            {segments.map((seg, i) => (seg.area ? <Path key={`area${i}`} d={seg.area} fill="url(#goalTrendFill)" /> : null))}
+            {segments.map((seg, i) => (
+              <Path key={`line${i}`} d={seg.path} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            ))}
             {xy.map((p, i) => (
               <Circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? 4.5 : 3} fill={color} />
             ))}
@@ -163,7 +192,7 @@ export function GoalTrendChart({ points, target, width, height = 240, color, tar
             </Text>
           ))}
 
-          {/* X-axis labels */}
+          {/* X-axis labels — always shown, even for slots with no data yet */}
           {xTicks.map((tick, i) => (
             <Text
               key={i}

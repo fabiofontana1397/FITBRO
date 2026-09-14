@@ -17,7 +17,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
-import { currentWeekDates, daysAgoISO, mondayIndex, weekdayShort } from '@/lib/mock/dates';
+import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekOfMonthIndex, weekdayShort, weeksInMonth } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
 import { estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
@@ -96,59 +96,72 @@ export default function HomeScreen() {
   const latestBody = latestSnapshot(bodyEntries);
   const startBody = bodyEntries[0];
   const doneSoFar = startBody.weightKg - latestBody.weightKg;
-  const remainingKg = Math.max(latestBody.weightKg - currentUser.targetWeightKg, 0);
 
-  // Day/week/year switches which aggregation of the logged history feeds
-  // the chart — day is the raw last-7-logged-entries view (what the
-  // reference screenshot itself shows), week/year average into coarser
-  // buckets so a long history doesn't turn into an unreadable wall of
-  // daily dots.
-  const [weightRange, setWeightRange] = useState<'giorno' | 'settimana' | 'anno'>('giorno');
+  // Day/week/month/year switches which fixed set of axis slots the chart
+  // shows — hours of today, days of this week, weeks of this month, months
+  // of this year — each slot keeping its gridline/label even when nothing
+  // was logged for it yet, so the axes always read as a complete chart
+  // rather than only appearing once data exists.
+  const [weightRange, setWeightRange] = useState<'giorno' | 'settimana' | 'mese' | 'anno'>('giorno');
   const weightSeries = useMemo<WeightPoint[]>(() => {
-    const sorted = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
+    const byDate = new Map<string, number[]>();
+    for (const e of bodyEntries) {
+      const bucket = byDate.get(e.date) ?? [];
+      bucket.push(e.weightKg);
+      byDate.set(e.date, bucket);
+    }
+    const avgFor = (date: string) => {
+      const values = byDate.get(date);
+      if (!values || values.length === 0) return null;
+      return Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 10) / 10;
+    };
+
+    const now = new Date();
 
     if (weightRange === 'giorno') {
-      return sorted.slice(-7).map((e) => ({ date: e.date, value: e.weightKg, xLabel: weekdayShort(e.date) }));
+      const HOURS = [0, 4, 8, 12, 16, 20];
+      const todayValue = avgFor(daysAgoISO(0));
+      const currentHour = now.getHours();
+      const activeIndex = HOURS.reduce((best, h, i) => (h <= currentHour ? i : best), 0);
+      return HOURS.map((h, i) => ({ xLabel: `${h.toString().padStart(2, '0')}`, value: i === activeIndex ? todayValue : null }));
     }
 
     if (weightRange === 'settimana') {
-      const byWeek = new Map<string, { sum: number; count: number }>();
-      for (const e of sorted) {
-        const weekStart = new Date(e.date);
-        weekStart.setDate(weekStart.getDate() - mondayIndex(weekStart));
-        const key = weekStart.toISOString().slice(0, 10);
-        const bucket = byWeek.get(key) ?? { sum: 0, count: 0 };
-        bucket.sum += e.weightKg;
-        bucket.count += 1;
-        byWeek.set(key, bucket);
+      return currentWeekDates(now).map((date) => ({ xLabel: weekdayShort(date), value: avgFor(date) }));
+    }
+
+    if (weightRange === 'mese') {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const bucketCount = weeksInMonth(year, month);
+      const sums = Array.from({ length: bucketCount }, () => ({ sum: 0, count: 0 }));
+      for (const [date, values] of byDate) {
+        const d = new Date(date);
+        if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+        const bucket = sums[weekOfMonthIndex(d)];
+        bucket.sum += values.reduce((sum, v) => sum + v, 0);
+        bucket.count += values.length;
       }
-      return [...byWeek.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .slice(-12)
-        .map(([date, bucket]) => ({
-          date,
-          value: Math.round((bucket.sum / bucket.count) * 10) / 10,
-          xLabel: new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }),
-        }));
+      return sums.map((bucket, i) => ({
+        xLabel: `Sett ${i + 1}`,
+        value: bucket.count > 0 ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null,
+      }));
     }
 
     // anno
-    const byMonth = new Map<string, { sum: number; count: number }>();
-    for (const e of sorted) {
-      const key = e.date.slice(0, 7);
-      const bucket = byMonth.get(key) ?? { sum: 0, count: 0 };
-      bucket.sum += e.weightKg;
-      bucket.count += 1;
-      byMonth.set(key, bucket);
+    const year = now.getFullYear();
+    const sums = Array.from({ length: 12 }, () => ({ sum: 0, count: 0 }));
+    for (const [date, values] of byDate) {
+      const d = new Date(date);
+      if (d.getFullYear() !== year) continue;
+      const bucket = sums[d.getMonth()];
+      bucket.sum += values.reduce((sum, v) => sum + v, 0);
+      bucket.count += values.length;
     }
-    return [...byMonth.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([key, bucket]) => {
-        const date = `${key}-01`;
-        const label = new Date(date).toLocaleDateString('it-IT', { month: 'short' });
-        return { date, value: Math.round((bucket.sum / bucket.count) * 10) / 10, xLabel: label.charAt(0).toUpperCase() + label.slice(1).replace('.', '') };
-      });
+    return sums.map((bucket, i) => ({
+      xLabel: monthShortLabel(year, i),
+      value: bucket.count > 0 ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null,
+    }));
   }, [bodyEntries, weightRange]);
 
   // One entry per weekday of the CURRENT calendar week — past days read
@@ -239,6 +252,7 @@ export default function HomeScreen() {
             options={[
               { value: 'giorno', label: 'Giorno' },
               { value: 'settimana', label: 'Settimana' },
+              { value: 'mese', label: 'Mese' },
               { value: 'anno', label: 'Anno' },
             ]}
             value={weightRange}
@@ -248,23 +262,29 @@ export default function HomeScreen() {
           <View style={styles.goalEmphasisRow}>
             <View style={{ flex: 1 }}>
               <ThemedText type="caption" themeColor="textSecondary">
-                Mancano al target
+                Peso attuale
               </ThemedText>
-              <ThemedText type="title" style={{ color: theme.accent }}>
-                {remainingKg.toFixed(1)} kg
-              </ThemedText>
+              <ThemedText type="subtitle">{latestBody.weightKg.toFixed(1)} kg</ThemedText>
             </View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
               <ThemedText type="caption" themeColor="textSecondary">
                 Progressi finora
               </ThemedText>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Icon name={doneSoFar > 0 ? 'trendDown' : 'trendUp'} size={16} color={doneSoFar > 0 ? theme.success : theme.danger} />
-                <ThemedText type="title" style={{ color: doneSoFar > 0 ? theme.success : theme.danger }}>
+                <Icon name={doneSoFar > 0 ? 'trendDown' : 'trendUp'} size={14} color={doneSoFar > 0 ? theme.success : theme.danger} />
+                <ThemedText type="subtitle" style={{ color: doneSoFar > 0 ? theme.success : theme.danger }}>
                   {doneSoFar > 0 ? '-' : '+'}
                   {Math.abs(doneSoFar).toFixed(1)} kg
                 </ThemedText>
               </View>
+            </View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Peso target
+              </ThemedText>
+              <ThemedText type="subtitle" style={{ color: theme.success }}>
+                {currentUser.targetWeightKg} kg
+              </ThemedText>
             </View>
           </View>
 
