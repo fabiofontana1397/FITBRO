@@ -10,13 +10,17 @@ import { Icon } from '@/components/ui/icon';
 import { InsightCard } from '@/components/ui/insight-card';
 import { MonthProgressBar } from '@/components/ui/month-progress-bar';
 import { SectionHeader } from '@/components/ui/section-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { exportDietPlanPdf } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
-import type { DietDayPlan, PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
+import type { PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
 import { isValidDietPlan, usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
+
+const WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((weekday) => ({ value: weekday, label: weekday }));
 
 const PHASE_LABEL: Record<PlanPhaseKind, string> = {
   adattamento: 'Adattamento',
@@ -39,6 +43,9 @@ export default function DietPlanScreen() {
   const selectedMonthData = plan?.months.find((m) => m.monthIndex === selectedMonth);
   const isUnlocked = selectedMonth <= currentMonthIdx;
   const progress = plan ? monthProgress(plan, selectedMonth) : null;
+
+  const [selectedWeekday, setSelectedWeekday] = useState(WEEKDAY_LABELS[0]);
+  const selectedDayData = selectedMonthData?.weeklySplit.find((d) => d.weekday === selectedWeekday);
 
   const handleExport = async () => {
     if (!plan) return;
@@ -151,11 +158,15 @@ export default function DietPlanScreen() {
                 <Target label="Grassi" value={`${selectedMonthData.macroTargetsG.fats}`} unit="g" />
               </View>
 
-              <View style={{ gap: Spacing.four }}>
-                {selectedMonthData.weeklySplit.map((day) => (
-                  <DayGroup key={day.weekday} day={day} />
-                ))}
-              </View>
+              <SegmentedControl options={WEEKDAY_OPTIONS} value={selectedWeekday} onChange={setSelectedWeekday} scrollable />
+
+              {selectedDayData ? (
+                <View style={{ gap: Spacing.two }}>
+                  {selectedDayData.meals.map((meal) => (
+                    <MealCard key={meal.slotId} meal={meal} />
+                  ))}
+                </View>
+              ) : null}
 
               <View>
                 <SectionHeader title="Consigli" />
@@ -185,25 +196,6 @@ export default function DietPlanScreen() {
         </>
       )}
     </ScreenScroll>
-  );
-}
-
-function DayGroup({ day }: { day: DietDayPlan }) {
-  const theme = useTheme();
-  return (
-    <View style={{ gap: Spacing.two }}>
-      <View style={styles.dayHeadingRow}>
-        <Icon name="nutrition" size={14} color={theme.textSecondary} />
-        <ThemedText type="label" themeColor="textSecondary">
-          {day.weekday}
-        </ThemedText>
-      </View>
-      <View style={{ gap: Spacing.two }}>
-        {day.meals.map((meal) => (
-          <MealCard key={meal.slotId} meal={meal} />
-        ))}
-      </View>
-    </View>
   );
 }
 
@@ -310,11 +302,6 @@ const styles = StyleSheet.create({
   target: {
     alignItems: 'center',
     gap: 2,
-  },
-  dayHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   mealCard: {
     gap: Spacing.two,
