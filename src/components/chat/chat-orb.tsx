@@ -2,23 +2,26 @@ import { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import { BlurView } from 'expo-blur';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
-type Petal = { colors: [string, string, string]; duration: number; direction: 1 | -1; baseAngle: number };
+type Petal = { colors: [string, string, string]; spinDuration: number; direction: 1 | -1; baseAngle: number; pulseDuration: number; pulseDelay: number };
 
-// Three oversized, soft-edged "petals" at 0/120/240° like a flower, each
-// its own shade of orange, each spinning at its own speed/direction — the
+// Five oversized, soft-edged "petals" at 72° apart like a flower, each its
+// own shade of warm color (from deep burnt orange through gold), each
+// spinning AND breathing (scale+opacity) at its own speed/phase — the
 // interference between them (not a single rotating image), then blurred
 // by the BlurView on top, is what turns flat shapes into the soft
 // glowing-plasma look rather than a flat graphic flower. Each petal is
-// concentric rings of the SAME hue shading from a rich orange at the edge
+// concentric rings of the SAME hue shading from a rich color at the edge
 // to a pale warm cream at the center (never pure white) — a real radial
 // gradient rather than a linear one, so it reads as soft light regardless
 // of the angle it's currently rotated to.
 const PETALS: Petal[] = [
-  { colors: ['#FF7A33', '#FFC79B', '#FFE3C4'], duration: 5200, direction: 1, baseAngle: 20 },
-  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], duration: 7400, direction: -1, baseAngle: 140 },
-  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], duration: 9200, direction: 1, baseAngle: 260 },
+  { colors: ['#FF7A33', '#FFC79B', '#FFE3C4'], spinDuration: 3400, direction: 1, baseAngle: 0, pulseDuration: 2000, pulseDelay: 0 },
+  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], spinDuration: 4600, direction: -1, baseAngle: 72, pulseDuration: 2600, pulseDelay: 200 },
+  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], spinDuration: 5800, direction: 1, baseAngle: 144, pulseDuration: 2300, pulseDelay: 500 },
+  { colors: ['#FFB020', '#FFD98A', '#FFF3D6'], spinDuration: 4100, direction: -1, baseAngle: 216, pulseDuration: 2900, pulseDelay: 300 },
+  { colors: ['#D93A0F', '#FF7A47', '#FFDCC2'], spinDuration: 6600, direction: 1, baseAngle: 288, pulseDuration: 2100, pulseDelay: 700 },
 ];
 
 // Ring sizes (fraction of the blob) and opacities shared by every petal —
@@ -31,13 +34,13 @@ const RING_OPACITIES = [0.34, 0.6, 0.88];
 // liquid-in-a-ball feel, on top of (not instead of) the petals' own
 // constant spinning. Silently stays at rest wherever the accelerometer
 // isn't available (web without permission, desktop, etc).
-const TILT_RANGE = 10;
+const TILT_RANGE = 14;
 
 /** A small "living" AI entity standing in for a literal chat-bubble icon:
- * a warm orange glass sphere with three shades of orange swirling
- * independently behind a soft blur (which is what fuses flat shapes into
- * a diffuse glow) — never settling into a static image, and drifting
- * toward whichever way the phone is tilted. */
+ * a warm glass sphere with five shades of orange-to-gold, each spinning
+ * and breathing independently behind a soft blur (which is what fuses
+ * flat shapes into a diffuse glow) — never settling into a static image,
+ * and drifting toward whichever way the phone is tilted. */
 export function ChatOrb({ size }: { size: number }) {
   const { tiltX, tiltY } = useTiltShift();
 
@@ -103,13 +106,22 @@ function useTiltShift() {
 
 function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
   const spin = useSharedValue(0);
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
-    spin.value = withRepeat(withTiming(1, { duration: petal.duration, easing: Easing.linear }), -1, false);
-  }, [spin, petal.duration]);
+    spin.value = withRepeat(withTiming(1, { duration: petal.spinDuration, easing: Easing.linear }), -1, false);
+    pulse.value = withDelay(
+      petal.pulseDelay,
+      withRepeat(withTiming(1, { duration: petal.pulseDuration, easing: Easing.inOut(Easing.sin) }), -1, true)
+    );
+  }, [spin, pulse, petal.spinDuration, petal.pulseDuration, petal.pulseDelay]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${petal.baseAngle + petal.direction * spin.value * 360}deg` }],
+    opacity: interpolate(pulse.value, [0, 1], [0.7, 1]),
+    transform: [
+      { rotate: `${petal.baseAngle + petal.direction * spin.value * 360}deg` },
+      { scale: interpolate(pulse.value, [0, 1], [0.85, 1.15]) },
+    ],
   }));
 
   // Bigger than the container and offset toward one edge (not centered) so
