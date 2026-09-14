@@ -1,55 +1,110 @@
 import { useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+
+import { formatDayMonth } from '@/lib/mock/dates';
+
+export type WeightPoint = { date: string; value: number };
 
 export type GoalTrendChartProps = {
-  /** Chronological actual values (e.g. logged weight-ins). */
-  data: number[];
-  /** Where the user wants to end up — rendered as a dashed reference line. */
+  /** Actual logged weigh-ins so far, chronological. */
+  history: WeightPoint[];
+  /** A possible future path toward the target given the current diet's
+   * calorie deficit/surplus — empty when there isn't enough info to
+   * project. Its first point should be the same as history's last point,
+   * so the dashed line continues seamlessly from the solid one. */
+  projection: WeightPoint[];
   target: number;
-  /** Fixed width; omit to fill whatever width the parent gives it. */
   width?: number;
   height?: number;
   color: string;
+  projectionColor: string;
   targetColor: string;
+  axisColor: string;
 };
 
-function buildPaths(data: number[], target: number, width: number, height: number, padding = 8) {
-  if (data.length < 2 || width <= 0) return { line: '', area: '', lastPoint: undefined, targetY: height / 2 };
+const PADDING_LEFT = 40;
+const PADDING_RIGHT = 10;
+const PADDING_TOP = 16;
+const PADDING_BOTTOM = 22;
 
-  // The target is folded into the min/max alongside the actual data so its
-  // dashed line always lands inside the chart — even a target well below
-  // (or above) every logged value stays visible instead of clipping off.
-  const allValues = [...data, target];
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
-  const range = max - min || 1;
-  const stepX = (width - padding * 2) / (data.length - 1);
-  const toY = (value: number) => padding + (height - padding * 2) * (1 - (value - min) / range);
+function buildChart(history: WeightPoint[], projection: WeightPoint[], target: number, width: number, height: number) {
+  const empty = { historyPath: '', historyArea: '', projectionPath: '', lastPoint: undefined, targetY: height / 2, milestone: undefined, xTicks: [], yTicks: [] };
+  if (history.length < 2 || width <= 0) return empty;
 
-  const points = data.map((value, index) => ({ x: padding + index * stepX, y: toY(value) }));
+  const allPoints = [...history, ...projection];
+  const values = [...allPoints.map((p) => p.value), target];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const valueRange = max - min || 1;
 
-  const line = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(' ');
+  const times = allPoints.map((p) => new Date(p.date).getTime());
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const timeRange = maxTime - minTime || 1;
 
-  const area = `${line} L ${points[points.length - 1].x.toFixed(2)} ${height} L ${points[0].x.toFixed(2)} ${height} Z`;
+  const plotWidth = width - PADDING_LEFT - PADDING_RIGHT;
+  const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
 
-  return { line, area, lastPoint: points[points.length - 1], targetY: toY(target) };
+  const toX = (date: string) => PADDING_LEFT + ((new Date(date).getTime() - minTime) / timeRange) * plotWidth;
+  const toY = (value: number) => PADDING_TOP + plotHeight * (1 - (value - min) / valueRange);
+
+  const historyXY = history.map((p) => ({ x: toX(p.date), y: toY(p.value) }));
+  const projectionXY = projection.map((p) => ({ x: toX(p.date), y: toY(p.value) }));
+
+  const historyPath = historyXY.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+  const historyArea = historyPath
+    ? `${historyPath} L ${historyXY[historyXY.length - 1].x.toFixed(2)} ${PADDING_TOP + plotHeight} L ${historyXY[0].x.toFixed(2)} ${PADDING_TOP + plotHeight} Z`
+    : '';
+  const projectionPath = projectionXY.length
+    ? projectionXY.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ')
+    : '';
+
+  const lastPoint = historyXY[historyXY.length - 1];
+
+  // The point (if any) where the projection actually lands on the target —
+  // rendered as its own milestone marker, distinct from the plain trend.
+  const milestoneIndex = projection.findIndex((p) => Math.abs(p.value - target) < 0.05);
+  const milestone = milestoneIndex >= 0 ? { ...projectionXY[milestoneIndex], date: projection[milestoneIndex].date } : undefined;
+
+  const xTicks = [
+    { x: PADDING_LEFT, label: formatDayMonth(history[0].date), anchor: 'start' as const },
+    { x: lastPoint.x, label: 'Oggi', anchor: 'middle' as const },
+    ...(projection.length
+      ? [{ x: toX(projection[projection.length - 1].date), label: formatDayMonth(projection[projection.length - 1].date), anchor: 'end' as const }]
+      : []),
+  ];
+
+  const yTicks = [
+    { y: toY(max), label: `${max.toFixed(1)}` },
+    { y: toY(min), label: `${min.toFixed(1)}` },
+  ];
+
+  return { historyPath, historyArea, projectionPath, lastPoint, targetY: toY(target), milestone, xTicks, yTicks };
 }
 
-/** A weight-style trend line that updates as new entries are logged, with
- * a dashed reference line marking the goal so progress toward it is
- * always visible at a glance — not just the current number. Fills the
- * parent's width by default (measured via onLayout) rather than needing a
- * hardcoded size, since it's meant to stretch across a card. */
-export function GoalTrendChart({ data, target, width, height = 96, color, targetColor }: GoalTrendChartProps) {
+/** A weight trend chart that updates as new entries are logged: the solid
+ * line is the actual history, the dashed line is a possible path toward
+ * the target given the diet plan's current calorie deficit/surplus, and
+ * the target itself is always marked — both as a reference line and, once
+ * the projection reaches it, as its own milestone point. */
+export function GoalTrendChart({
+  history,
+  projection,
+  target,
+  width,
+  height = 168,
+  color,
+  projectionColor,
+  targetColor,
+  axisColor,
+}: GoalTrendChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const chartWidth = width ?? measuredWidth;
 
-  const { line, area, lastPoint, targetY } = useMemo(
-    () => buildPaths(data, target, chartWidth, height),
-    [data, target, chartWidth, height]
+  const { historyPath, historyArea, projectionPath, lastPoint, targetY, milestone, xTicks, yTicks } = useMemo(
+    () => buildChart(history, projection, target, chartWidth, height),
+    [history, projection, target, chartWidth, height]
   );
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -66,10 +121,72 @@ export function GoalTrendChart({ data, target, width, height = 96, color, target
               <Stop offset="1" stopColor={color} stopOpacity={0} />
             </LinearGradient>
           </Defs>
-          <Line x1={0} y1={targetY} x2={chartWidth} y2={targetY} stroke={targetColor} strokeWidth={1.5} strokeDasharray="5 5" />
-          {area ? <Path d={area} fill="url(#goalTrendFill)" /> : null}
-          {line ? <Path d={line} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+
+          {/* Axes */}
+          <Line
+            x1={PADDING_LEFT}
+            y1={PADDING_TOP}
+            x2={PADDING_LEFT}
+            y2={height - PADDING_BOTTOM}
+            stroke={axisColor}
+            strokeWidth={1}
+          />
+          <Line
+            x1={PADDING_LEFT}
+            y1={height - PADDING_BOTTOM}
+            x2={chartWidth - PADDING_RIGHT}
+            y2={height - PADDING_BOTTOM}
+            stroke={axisColor}
+            strokeWidth={1}
+          />
+          {yTicks.map((tick, i) => (
+            <SvgText key={i} x={PADDING_LEFT - 6} y={tick.y + 4} fontSize={10} fill={axisColor} textAnchor="end">
+              {tick.label}
+            </SvgText>
+          ))}
+          {xTicks.map((tick, i) => (
+            <SvgText key={i} x={tick.x} y={height - 6} fontSize={10} fill={axisColor} textAnchor={tick.anchor}>
+              {tick.label}
+            </SvgText>
+          ))}
+
+          {/* Target reference line */}
+          <Line
+            x1={PADDING_LEFT}
+            y1={targetY}
+            x2={chartWidth - PADDING_RIGHT}
+            y2={targetY}
+            stroke={targetColor}
+            strokeWidth={1.5}
+            strokeDasharray="5 5"
+          />
+          <SvgText x={chartWidth - PADDING_RIGHT} y={targetY - 6} fontSize={10} fill={targetColor} textAnchor="end">
+            Obiettivo {target}kg
+          </SvgText>
+
+          {historyArea ? <Path d={historyArea} fill="url(#goalTrendFill)" /> : null}
+          {historyPath ? (
+            <Path d={historyPath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          ) : null}
+          {projectionPath ? (
+            <Path
+              d={projectionPath}
+              stroke={projectionColor}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="6 5"
+            />
+          ) : null}
+
           {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
+          {milestone ? (
+            <>
+              <Circle cx={milestone.x} cy={milestone.y} r={6} fill="none" stroke={targetColor} strokeWidth={2} />
+              <Circle cx={milestone.x} cy={milestone.y} r={3} fill={targetColor} />
+            </>
+          ) : null}
         </Svg>
       ) : null}
     </View>

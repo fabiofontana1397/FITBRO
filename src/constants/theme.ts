@@ -58,8 +58,11 @@ export const Colors = {
     accentPressed: orange[600],
     accentSoft: orange[50],
     onAccent: neutral[0],
-    success: '#1F9254',
-    warning: '#B8860B',
+    // Pushed toward the same "highlighter marker" saturation as dark mode's
+    // neon green/yellow below, but held back a notch so they still read as
+    // text on a white background instead of washing out.
+    success: '#00A651',
+    warning: '#D9A600',
     danger: '#D6402C',
     tabBarBlur: 'light' as const,
     shadow: 'rgba(20,20,25,0.12)',
@@ -80,8 +83,11 @@ export const Colors = {
     accentPressed: orange[300],
     accentSoft: 'rgba(255,106,0,0.16)',
     onAccent: neutral[0],
-    success: '#3DD07A',
-    warning: '#E0B23D',
+    // True neon-marker green/yellow — dark is the hero mode, and these read
+    // as genuinely bright against near-black the way a highlighter does
+    // under UV rather than the previous muted amber/jade.
+    success: '#39FF14',
+    warning: '#FFE600',
     danger: '#FF6B57',
     tabBarBlur: 'dark' as const,
     shadow: 'rgba(0,0,0,0.5)',

@@ -14,13 +14,15 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
-import { latestSnapshot, seriesOf } from '@/lib/mock/body';
-import { daysAgoISO, mondayIndex } from '@/lib/mock/dates';
+import { latestSnapshot } from '@/lib/mock/body';
+import { addDaysISO, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
+import { computeNutritionTargets, deriveWeeklyTrainingDays } from '@/lib/nutrition/targets';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
 import { useBodyStore } from '@/store/body-store';
-import { sumMacros, useNutritionStore } from '@/store/nutrition-store';
+import { useNutritionStore, sumMacros } from '@/store/nutrition-store';
+import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
 import { historyForExercise, isExerciseCompleted, useTrainingProgressStore } from '@/store/training-progress-store';
 import { useUserStore } from '@/store/user-store';
@@ -39,6 +41,7 @@ export default function HomeScreen() {
 
   const trainingPlan = usePlanStore((s) => s.trainingPlan);
   const dietPlan = usePlanStore((s) => s.dietPlan);
+  const onboardingAnswers = useOnboardingStore((s) => s.answers);
   const completedExercises = useTrainingProgressStore((s) => s.completed);
   const loggedSets = useTrainingProgressStore((s) => s.sets);
   const nutritionEntries = useNutritionStore((s) => s.entries);
@@ -94,6 +97,48 @@ export default function HomeScreen() {
   const weightProgress = totalToLose > 0 ? Math.min(doneSoFar / totalToLose, 1) : 1;
   const remainingKg = Math.max(latestBody.weightKg - currentUser.targetWeightKg, 0);
 
+  const weightHistory = useMemo(() => bodyEntries.map((e) => ({ date: e.date, value: e.weightKg })), [bodyEntries]);
+
+  // A possible future path toward the goal, driven by the SAME deficit/
+  // surplus the diet plan actually sets: recompute maintenance (TDEE) from
+  // the latest weight via the same formula onboarding used, then compare it
+  // against what the plan currently has the user eating — the gap between
+  // the two, at ~7700kcal per kg, is the weekly rate of change. Not a
+  // real forecast (a person's real trajectory never follows a straight
+  // line), just an illustration of where the current plan is heading.
+  const weightProjection = useMemo(() => {
+    const targetWeightKg = currentUser.targetWeightKg;
+    if (Math.abs(latestBody.weightKg - targetWeightKg) < 0.05) return [];
+
+    const { tdee } = computeNutritionTargets({
+      sex: currentUser.sex,
+      ageRange: currentUser.ageRange,
+      heightCm: currentUser.heightCm,
+      currentWeightKg: latestBody.weightKg,
+      goal: currentUser.goal,
+      jobActivity: onboardingAnswers.jobActivity as string | undefined,
+      weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
+    });
+
+    const dailyDeficit = tdee - calorieTarget; // > 0 means eating below maintenance
+    const weeklyChangeKg = -(dailyDeficit * 7) / 7700; // ~7700kcal per kg of fat
+
+    const movingTowardTarget =
+      weeklyChangeKg < 0 ? targetWeightKg < latestBody.weightKg : weeklyChangeKg > 0 ? targetWeightKg > latestBody.weightKg : false;
+    if (!movingTowardTarget) return [];
+
+    const points = [{ date: today, value: latestBody.weightKg }];
+    let weight = latestBody.weightKg;
+    for (let week = 1; week <= 26; week++) {
+      weight += weeklyChangeKg;
+      const reached = weeklyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
+      if (reached) weight = targetWeightKg;
+      points.push({ date: addDaysISO(today, week * 7), value: weight });
+      if (reached) break;
+    }
+    return points;
+  }, [currentUser, latestBody.weightKg, onboardingAnswers, calorieTarget, today]);
+
   // Every exercise appearing anywhere in the plan (same de-duplication
   // training-progress.tsx uses), so "recent" lifts aren't limited to today.
   const exercisesInPlan = useMemo(() => {
@@ -138,11 +183,14 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
           <GoalTrendChart
-            data={seriesOf(bodyEntries, 'weightKg')}
+            history={weightHistory}
+            projection={weightProjection}
             target={currentUser.targetWeightKg}
-            height={100}
+            height={172}
             color={theme.accent}
-            targetColor={theme.textTertiary}
+            projectionColor={theme.accent}
+            targetColor={theme.success}
+            axisColor={theme.textTertiary}
           />
         </GlassSurface>
       </View>
