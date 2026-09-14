@@ -17,11 +17,11 @@ type Petal = { colors: [string, string, string]; spinDuration: number; direction
 // gradient rather than a linear one, so it reads as soft light regardless
 // of the angle it's currently rotated to.
 const PETALS: Petal[] = [
-  { colors: ['#FF7A33', '#FFC79B', '#FFE3C4'], spinDuration: 3400, direction: 1, baseAngle: 0, pulseDuration: 2000, pulseDelay: 0 },
-  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], spinDuration: 4600, direction: -1, baseAngle: 72, pulseDuration: 2600, pulseDelay: 200 },
-  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], spinDuration: 5800, direction: 1, baseAngle: 144, pulseDuration: 2300, pulseDelay: 500 },
-  { colors: ['#FFB020', '#FFD98A', '#FFF3D6'], spinDuration: 4100, direction: -1, baseAngle: 216, pulseDuration: 2900, pulseDelay: 300 },
-  { colors: ['#D93A0F', '#FF7A47', '#FFDCC2'], spinDuration: 6600, direction: 1, baseAngle: 288, pulseDuration: 2100, pulseDelay: 700 },
+  { colors: ['#FF7A33', '#FFC79B', '#FFE3C4'], spinDuration: 1700, direction: 1, baseAngle: 0, pulseDuration: 1100, pulseDelay: 0 },
+  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], spinDuration: 2300, direction: -1, baseAngle: 72, pulseDuration: 1400, pulseDelay: 200 },
+  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], spinDuration: 2900, direction: 1, baseAngle: 144, pulseDuration: 1250, pulseDelay: 500 },
+  { colors: ['#FFB020', '#FFD98A', '#FFF3D6'], spinDuration: 2050, direction: -1, baseAngle: 216, pulseDuration: 1550, pulseDelay: 300 },
+  { colors: ['#D93A0F', '#FF7A47', '#FFDCC2'], spinDuration: 3300, direction: 1, baseAngle: 288, pulseDuration: 1150, pulseDelay: 700 },
 ];
 
 // Ring sizes (fraction of the blob) and opacities shared by every petal —
@@ -117,21 +117,21 @@ function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
   }, [spin, pulse, petal.spinDuration, petal.pulseDuration, petal.pulseDelay]);
 
   const style = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.7, 1]),
+    opacity: interpolate(pulse.value, [0, 1], [0.5, 1]),
     transform: [
       { rotate: `${petal.baseAngle + petal.direction * spin.value * 360}deg` },
-      { scale: interpolate(pulse.value, [0, 1], [0.85, 1.15]) },
+      { scale: interpolate(pulse.value, [0, 1], [0.7, 1.35]) },
     ],
   }));
 
   // Bigger than the container and offset toward one edge (not centered) so
   // rotating it sweeps the color around the sphere rather than just fading
-  // a centered blob in place.
+  // a centered blob in place — offset pushed further out for a wider sweep.
   const blobSize = size * 1.35;
 
   return (
     <Animated.View style={[styles.layer, style]}>
-      <View style={{ position: 'absolute', width: blobSize, height: blobSize, top: -blobSize * 0.32, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', width: blobSize, height: blobSize, top: -blobSize * 0.42, alignItems: 'center', justifyContent: 'center' }}>
         {RING_SCALES.map((scale, i) => {
           const ringSize = blobSize * scale;
           return (
