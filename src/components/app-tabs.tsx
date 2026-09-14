@@ -30,9 +30,15 @@ const FADE_HEIGHT = BottomTabInset + Spacing.six;
 // each covering only the zone below its own start, approximates a blur
 // that gradually deepens instead of cutting on: near the top only the
 // first (weakest) band applies, and by the bottom all of them are
-// compositing on top of each other. web/native use different absolute
-// scales for `intensity`, so each is its own progression.
-const BLUR_BANDS = { web: [4, 8, 13, 18], default: [7, 13, 19, 25] } as const;
+// compositing on top of each other. Seven bands starting from a barely-
+// there first step (rather than four starting stronger) so even that
+// very first step is too small to read as a seam. web/native use
+// different absolute scales for `intensity`, so each is its own
+// progression.
+const BLUR_BANDS = {
+  web: [1, 2, 3, 5, 8, 12, 17],
+  default: [2, 3, 5, 8, 12, 17, 23],
+} as const;
 
 const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] = [
   { name: 'index', href: '/', label: 'Oggi', icon: 'home' },
