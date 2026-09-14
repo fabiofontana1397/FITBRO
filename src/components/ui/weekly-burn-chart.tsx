@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
+import Svg, { Line, Rect } from 'react-native-svg';
 
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { ThemedText } from '@/components/themed-text';
@@ -20,9 +20,13 @@ export type WeeklyBurnDay = {
 
 export type WeeklyBurnChartProps = {
   days: WeeklyBurnDay[];
-  /** Bar color on a surplus day (ate more than burned). */
+  /** Legend swatch only — no bar is drawn in this color anymore. */
+  burnedColor: string;
+  /** Legend swatch only — no bar is drawn in this color anymore. */
+  eatenColor: string;
+  /** Bar color on a surplus day (ate more than burned) — grows upward, above zero. */
   surplusColor: string;
-  /** Bar color on a deficit day (burned more than ate). */
+  /** Bar color on a deficit day (burned more than ate) — grows downward, below zero. */
   deficitColor: string;
   trackColor: string;
   axisColor: string;
@@ -37,12 +41,12 @@ export type WeeklyBurnChartProps = {
   height?: number;
 };
 
-// Kept narrow now that it only has to fit a handful of kcal digits, so the
-// ring-badge row below gets as much of the card's width as possible —
-// otherwise the 40px rings would overlap in a 7-column, no-scroll week.
-const GUTTER_WIDTH = 24;
-const PADDING_TOP = 20;
-const PADDING_BOTTOM = 4;
+// Kept narrow so the ring-badge row below gets as much of the card's width
+// as possible — otherwise the 7 same-width rings would overlap in a
+// no-scroll week.
+const GUTTER_WIDTH = 30;
+const PADDING_TOP = 14;
+const PADDING_BOTTOM = 14;
 const PERIOD_LABEL_HEIGHT = 18;
 const RING_SIZE = 36;
 
@@ -53,24 +57,30 @@ type Bar = {
   barH: number;
   barWidth: number;
   delta: number | null;
-  topY: number;
+  /** Where the value label goes — above the bar for a surplus (it grows up),
+   * below the bar for a deficit (it grows down). */
+  labelY: number;
 };
 
 function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
-  if (plotWidth <= 0 || days.length === 0) return { bars: [] as Bar[], yTicks: [] as { y: number; label: string }[] };
+  if (plotWidth <= 0 || days.length === 0) return { bars: [] as Bar[], zeroY: height / 2, maxLabel: '0' };
 
-  const deltas = days.map((d) => (d.hasHappened ? d.burnedKcal - d.eatenKcal : null));
+  // Surplus (ate more than burned) is positive and grows up from zero;
+  // deficit (burned more than ate) is negative and grows down from zero.
+  const deltas = days.map((d) => (d.hasHappened ? d.eatenKcal - d.burnedKcal : null));
   const max = Math.max(...deltas.filter((d): d is number => d != null).map((d) => Math.abs(d)), 1);
 
   const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
+  const halfHeight = plotHeight / 2;
+  const zeroY = PADDING_TOP + halfHeight;
   const colWidth = plotWidth / days.length;
   const barWidth = Math.max(10, Math.min(22, colWidth * 0.5));
 
   const bars: Bar[] = days.map((day, i) => {
     const colX = i * colWidth + colWidth / 2;
     const delta = deltas[i];
-    const barH = delta != null ? (Math.abs(delta) / max) * plotHeight : 0;
-    const barY = PADDING_TOP + plotHeight - barH;
+    const barH = delta != null ? (Math.abs(delta) / max) * halfHeight : 0;
+    const barY = delta != null && delta >= 0 ? zeroY - barH : zeroY;
     return {
       colX,
       barX: colX - barWidth / 2,
@@ -78,25 +88,23 @@ function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
       barH,
       barWidth,
       delta,
-      topY: PADDING_TOP + plotHeight - Math.max(barH, 1),
+      labelY: delta != null && delta >= 0 ? barY - 13 : barY + barH + 3,
     };
   });
 
-  const yTicks = [
-    { y: PADDING_TOP, label: `${Math.round(max)}` },
-    { y: PADDING_TOP + plotHeight, label: '0' },
-  ];
-
-  return { bars, yTicks };
+  return { bars, zeroY, maxLabel: `${Math.round(max)}` };
 }
 
 /** A week-at-a-glance card, always showing Monday-Sunday of the current
  * week (no scrolling): one bar per day for that day's calorie
- * deficit/surplus (fuchsia/blue), labeled with its kcal value, with a
- * concentric-ring badge below each day summarizing that day's
+ * deficit/surplus, growing up from a centered zero line on a surplus day
+ * (blue) and down on a deficit day (fuchsia), labeled with its kcal value.
+ * A concentric-ring badge below each day summarizes that day's
  * training/diet/steps. Days that haven't happened yet show no bar. */
 export function WeeklyBurnChart({
   days,
+  burnedColor,
+  eatenColor,
   surplusColor,
   deficitColor,
   trackColor,
@@ -114,7 +122,7 @@ export function WeeklyBurnChart({
   const plotWidth = Math.max(containerWidth - GUTTER_WIDTH, 0);
   const colWidth = plotWidth / Math.max(days.length, 1);
 
-  const { bars, yTicks } = buildBars(days, plotWidth, height);
+  const { bars, zeroY, maxLabel } = buildBars(days, plotWidth, height);
 
   const onLayout = (e: LayoutChangeEvent) => {
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
@@ -127,20 +135,38 @@ export function WeeklyBurnChart({
       {containerWidth > 0 ? (
         <>
           <View style={{ flexDirection: 'row' }}>
-            {/* Fixed kcal-axis gutter */}
+            {/* Fixed kcal-axis gutter — top is the surplus scale, bottom
+                (mirrored) the deficit scale, zero in the middle. */}
             <View style={{ width: GUTTER_WIDTH, height }}>
-              {yTicks.map((tick, i) => (
-                <Text
-                  key={i}
-                  style={{ position: 'absolute', left: 0, width: GUTTER_WIDTH - 4, top: tick.y - 6, fontSize: 9, color: axisColor, textAlign: 'right' }}>
-                  {tick.label}
-                </Text>
-              ))}
+              <Text
+                numberOfLines={1}
+                style={{ position: 'absolute', left: 0, width: GUTTER_WIDTH - 4, top: PADDING_TOP - 6, fontSize: 9, color: axisColor, textAlign: 'right' }}>
+                {maxLabel}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ position: 'absolute', left: 0, width: GUTTER_WIDTH - 4, top: zeroY - 6, fontSize: 9, color: axisColor, textAlign: 'right' }}>
+                0
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: GUTTER_WIDTH - 4,
+                  top: height - PADDING_BOTTOM - 6,
+                  fontSize: 9,
+                  color: axisColor,
+                  textAlign: 'right',
+                }}>
+                -{maxLabel}
+              </Text>
             </View>
 
             <View style={{ width: plotWidth }}>
               <View style={{ width: plotWidth, height }}>
                 <Svg width={plotWidth} height={height}>
+                  <Line x1={0} y1={zeroY} x2={plotWidth} y2={zeroY} stroke={trackColor} strokeWidth={1} />
                   {bars.map((bar, i) =>
                     bar.delta != null ? (
                       <Rect
@@ -150,7 +176,7 @@ export function WeeklyBurnChart({
                         width={bar.barWidth}
                         height={Math.max(bar.barH, 1)}
                         rx={3}
-                        fill={bar.delta >= 0 ? deficitColor : surplusColor}
+                        fill={bar.delta >= 0 ? surplusColor : deficitColor}
                       />
                     ) : null
                   )}
@@ -164,11 +190,11 @@ export function WeeklyBurnChart({
                         position: 'absolute',
                         left: bar.colX - 22,
                         width: 44,
-                        top: Math.max(bar.topY - 13, 0),
+                        top: bar.labelY,
                         fontSize: 9,
                         fontWeight: '700',
                         textAlign: 'center',
-                        color: bar.delta >= 0 ? deficitColor : surplusColor,
+                        color: bar.delta >= 0 ? surplusColor : deficitColor,
                       }}>
                       {bar.delta >= 0 ? '+' : ''}
                       {Math.round(bar.delta)}
@@ -219,6 +245,8 @@ export function WeeklyBurnChart({
 
           {/* Legend, below the period caption */}
           <View style={styles.legendRow}>
+            <LegendItem color={burnedColor} label="Bruciate" />
+            <LegendItem color={eatenColor} label="Assunte" />
             <LegendItem color={deficitColor} label="Deficit" />
             <LegendItem color={surplusColor} label="Surplus" />
           </View>

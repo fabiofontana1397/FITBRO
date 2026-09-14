@@ -343,6 +343,8 @@ export default function HomeScreen() {
               hasHappened: d.hasHappened,
               rings: { training: d.trainingProgress, diet: d.dietProgress, steps: d.stepsProgress },
             }))}
+            burnedColor={theme.accent}
+            eatenColor={theme.success}
             deficitColor={theme.calorieDeficit}
             surplusColor={theme.calorieSurplus}
             trackColor={theme.backgroundElement}
