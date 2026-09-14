@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   item: {
+    flex: 1,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     zIndex: 1,
