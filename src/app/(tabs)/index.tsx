@@ -245,10 +245,38 @@ export default function HomeScreen() {
                 Target {currentUser.targetWeightKg} kg · {remainingKg.toFixed(1)} kg al target
               </ThemedText>
             </View>
-            <ThemedText type="smallBold" style={{ color: theme.accent }}>
-              {Math.round(weightProgress * 100)}%
+            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+              <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                {Math.round(weightProgress * 100)}%
+              </ThemedText>
+              {doneSoFar !== 0 ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Icon name={doneSoFar > 0 ? 'trendDown' : 'trendUp'} size={12} color={doneSoFar > 0 ? theme.success : theme.danger} />
+                  <ThemedText type="caption" style={{ color: doneSoFar > 0 ? theme.success : theme.danger, fontWeight: '700' }}>
+                    {doneSoFar > 0 ? '-' : '+'}
+                    {Math.abs(doneSoFar).toFixed(1)}kg finora
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* A plain filling bar makes the advancement toward the target
+              unmistakable at a glance, on top of (not instead of) the trend
+              line below — the line alone wasn't reading as visible
+              progress. */}
+          <View style={[styles.goalProgressTrack, { backgroundColor: theme.backgroundElement }]}>
+            <View style={[styles.goalProgressFill, { width: `${Math.round(weightProgress * 100)}%`, backgroundColor: theme.accent }]} />
+          </View>
+          <View style={styles.goalProgressLabels}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {startBody.weightKg.toFixed(1)} kg
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {currentUser.targetWeightKg} kg
             </ThemedText>
           </View>
+
           <GoalTrendChart
             history={weightHistory}
             projection={weightProjection}
@@ -474,6 +502,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+  },
+  goalProgressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  goalProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  goalProgressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -Spacing.two,
   },
   overviewCard: {
     flexDirection: 'row',

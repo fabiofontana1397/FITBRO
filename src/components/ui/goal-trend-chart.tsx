@@ -34,6 +34,7 @@ function buildChart(history: WeightPoint[], projection: WeightPoint[], target: n
     historyPath: '',
     historyArea: '',
     projectionPath: '',
+    historyXY: [] as { x: number; y: number }[],
     lastPoint: undefined as { x: number; y: number } | undefined,
     targetY: height / 2,
     milestone: undefined as { x: number; y: number; date: string } | undefined,
@@ -90,7 +91,7 @@ function buildChart(history: WeightPoint[], projection: WeightPoint[], target: n
     { y: toY(min), label: `${min.toFixed(1)}` },
   ];
 
-  return { historyPath, historyArea, projectionPath, lastPoint, targetY: toY(target), milestone, xTicks, yTicks };
+  return { historyPath, historyArea, projectionPath, historyXY, lastPoint, targetY: toY(target), milestone, xTicks, yTicks };
 }
 
 /** A weight trend chart that updates as new entries are logged: the solid
@@ -116,7 +117,7 @@ export function GoalTrendChart({
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const chartWidth = width ?? measuredWidth;
 
-  const { historyPath, historyArea, projectionPath, lastPoint, targetY, milestone, xTicks, yTicks } = useMemo(
+  const { historyPath, historyArea, projectionPath, historyXY, targetY, milestone, xTicks, yTicks } = useMemo(
     () => buildChart(history, projection, target, chartWidth, height),
     [history, projection, target, chartWidth, height]
   );
@@ -175,7 +176,12 @@ export function GoalTrendChart({
               />
             ) : null}
 
-            {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
+            {/* Every logged weigh-in gets its own dot, not just the latest —
+                each is a visible step of progress, not just a smooth
+                line implying movement. */}
+            {historyXY.map((p, i) => (
+              <Circle key={i} cx={p.x} cy={p.y} r={i === historyXY.length - 1 ? 4 : 2.5} fill={color} />
+            ))}
             {milestone ? (
               <>
                 <Circle cx={milestone.x} cy={milestone.y} r={6} fill="none" stroke={targetColor} strokeWidth={2} />
