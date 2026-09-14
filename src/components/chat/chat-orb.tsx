@@ -21,17 +21,17 @@ type Blob = {
   freqRatio: number;
 };
 
-// Three large, slow-drifting color fields (not five small ones) — matching
-// a reference photo of a plain painterly gradient sphere: a soft warm
-// cream upper-left, a deep maroon upper-right, and a warm gold lower-right,
-// each far bigger than the sphere itself (see blobSize) so their own outer
-// rim always falls outside the visible circle. That's what keeps this from
-// reading as "spheres moving around": you only ever see the gradual-
-// falloff interior of each field, never a closed edge.
+// Three large color fields in their own regions of the sphere (not five
+// small pulsing petals) — a vivid, saturated orange throughout rather than
+// the muted cream/maroon/gold of the reference photo, per request, while
+// keeping the same three-region composition and soft radial falloff. Each
+// is far bigger than the sphere itself (see blobSize) so its own outer rim
+// always falls outside the visible circle — you only ever see the
+// gradual-falloff interior of each field, never a closed edge.
 const BLOBS: Blob[] = [
-  { colors: ['#B8570F', '#FF9A4D', '#FFDDA0'], baseOffset: { x: -0.16, y: -0.22 }, orbitDuration: 10000, direction: 1, phase: 0, freqRatio: 0.8 },
-  { colors: ['#3D1204', '#6B2708', '#9C4013'], baseOffset: { x: 0.2, y: -0.26 }, orbitDuration: 12500, direction: -1, phase: 2.1, freqRatio: 1.2 },
-  { colors: ['#A63D12', '#FF8A46', '#FFC98A'], baseOffset: { x: 0.24, y: 0.12 }, orbitDuration: 8800, direction: 1, phase: 4.2, freqRatio: 0.65 },
+  { colors: ['#D9660F', '#FF7A1A', '#FFB454'], baseOffset: { x: -0.16, y: -0.22 }, orbitDuration: 4200, direction: 1, phase: 0, freqRatio: 0.8 },
+  { colors: ['#7A1E00', '#B33A0A', '#E8590C'], baseOffset: { x: 0.2, y: -0.26 }, orbitDuration: 5200, direction: -1, phase: 2.1, freqRatio: 1.2 },
+  { colors: ['#C24E12', '#FF7A1A', '#FFA83D'], baseOffset: { x: 0.24, y: 0.12 }, orbitDuration: 3600, direction: 1, phase: 4.2, freqRatio: 0.65 },
 ];
 
 // Gradient stops shared by every blob's radial fill — brightest at the
@@ -54,11 +54,11 @@ const GRADIENT_STOPS = [
 const TILT_RANGE = 10;
 
 /** A small "living" AI entity standing in for a literal chat-bubble icon:
- * a warm painterly glass sphere where three oversized color fields (cream,
- * maroon, gold) slowly wander past each other, drifting toward whichever
- * way the phone is tilted — colors continuously blending into one another
- * with no perceivable border between them, rather than looking like
- * separate spheres sliding around. */
+ * a vivid orange painterly glass sphere where three oversized color fields
+ * wander around their own resting spot, drifting toward whichever way the
+ * phone is tilted — colors continuously blending into one another with no
+ * perceivable border between them, rather than looking like separate
+ * spheres sliding around. */
 export function ChatOrb({ size }: { size: number }) {
   const { tiltX, tiltY } = useTiltShift();
 
@@ -67,7 +67,7 @@ export function ChatOrb({ size }: { size: number }) {
   }));
 
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF5A1F' }}>
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF6A00' }}>
       <Animated.View style={[styles.layer, tiltStyle]}>
         {BLOBS.map((blob, i) => (
           <BlobLayer key={i} blob={blob} size={size} index={i} />
@@ -141,11 +141,12 @@ function BlobLayer({ blob, size, index }: { blob: Blob; size: number; index: num
     orbit.value = withRepeat(withTiming(1, { duration: blob.orbitDuration, easing: Easing.linear }), -1, false);
   }, [orbit, blob.orbitDuration]);
 
-  // Only a small wiggle around its resting spot — no breathing/pulsing
-  // here, since brightening and moving at once is exactly what read as
-  // "blinking white dots" before, and a big orbit would drag each color
-  // across the whole sphere instead of keeping it in its own region.
-  const wiggleRadius = size * 0.06;
+  // A wiggle around its resting spot big enough to actually be seen
+  // moving (the earlier 0.06 was too subtle to read as motion at all) —
+  // no breathing/pulsing though, since brightening and moving at once is
+  // exactly what read as "blinking white dots" before, and a much bigger
+  // orbit would drag each color out of its own region entirely.
+  const wiggleRadius = size * 0.16;
   const baseX = size * blob.baseOffset.x;
   const baseY = size * blob.baseOffset.y;
 

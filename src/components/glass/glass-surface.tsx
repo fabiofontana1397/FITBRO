@@ -23,6 +23,10 @@ const LEVEL_SHADOW: Record<GlassLevel, { opacity: number; radius: number; offset
 
 export type GlassSurfaceProps = {
   level?: GlassLevel;
+  /** Overrides the level's default blur intensity — lower reads as more
+   * transparent. Use sparingly; `level` alone keeps every glass surface in
+   * the app reading as one coherent material. */
+  intensity?: number;
   radius?: number;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
@@ -45,6 +49,7 @@ const CHILD_LAYOUT_KEYS = ['gap', 'rowGap', 'columnGap', 'flexDirection', 'align
  */
 export function GlassSurface({
   level = 'card',
+  intensity,
   radius = Radius.large,
   style,
   children,
@@ -88,7 +93,7 @@ export function GlassSurface({
         outerStyle,
       ]}>
       <BlurView
-        intensity={LEVEL_INTENSITY[level]}
+        intensity={intensity ?? LEVEL_INTENSITY[level]}
         tint={isDark ? 'dark' : 'light'}
         blurMethod="dimezisBlurViewSdk31Plus"
         style={StyleSheet.absoluteFill}
