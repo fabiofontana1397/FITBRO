@@ -80,6 +80,14 @@ export default function TrainingScreen() {
 
   const dayTypeForDate = (date: string) => weeklySplit[mondayIndex(new Date(date))]?.type;
 
+  const isDayComplete = (date: string): boolean => {
+    const day = weeklySplit[mondayIndex(new Date(date))];
+    if (day?.type !== 'workout') return false;
+    const exercises = day.exercises ?? [];
+    if (exercises.length === 0) return false;
+    return exercises.every((exercise) => isExerciseCompleted(completedExercises, exercise.id, date));
+  };
+
   return (
     <ScreenScroll>
       <ScreenHeader eyebrow="Il tuo programma" title="Training" />
@@ -136,6 +144,7 @@ export default function TrainingScreen() {
               dayTypeForDate={dayTypeForDate}
               onSelect={setSelectedDate}
               onCenterChange={setVisibleDate}
+              isDayComplete={isDayComplete}
             />
           </View>
 

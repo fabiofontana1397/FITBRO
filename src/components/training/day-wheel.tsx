@@ -11,11 +11,15 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
+  withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { Icon } from '@/components/ui/icon';
 import { ThemedText } from '@/components/themed-text';
+import { SpringSnappy } from '@/constants/motion';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addDaysISO, dayOfMonth, daysAgoISO, isToday, weekdayShort } from '@/lib/mock/dates';
@@ -30,6 +34,9 @@ export type DayWheelProps = {
    * so a "month" label above it can track the day passing under the
    * center marker instead of jumping only once scrolling stops. */
   onCenterChange?: (date: string) => void;
+  /** True once every exercise planned for that date has been checked off —
+   * shows a celebratory badge on the day chip. */
+  isDayComplete?: (date: string) => boolean;
 };
 
 const ITEM_WIDTH = 56;
@@ -49,7 +56,7 @@ function dotColorFor(dayType: DayWheelDayType | undefined, theme: ReturnType<typ
 /** A continuously scrollable, snap-to-day picker — like the iOS alarm-time
  * wheel, but horizontal: the centered day is emphasized, neighbors shrink
  * and fade with distance, replacing the old paginated Mon–Sun strip. */
-export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChange }: DayWheelProps) {
+export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChange, isDayComplete }: DayWheelProps) {
   const theme = useTheme();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollX = useSharedValue(0);
@@ -202,6 +209,7 @@ export function DayWheel({ selectedDate, dayTypeForDate, onSelect, onCenterChang
                 scrollX={scrollX}
                 selected={date === selectedDate}
                 dayType={dayTypeForDate(date)}
+                complete={isDayComplete?.(date) ?? false}
                 onPress={() => {
                   animateScrollTo(index * ITEM_WIDTH);
                   commitIndex(index);
@@ -221,6 +229,7 @@ function DayWheelItem({
   scrollX,
   selected,
   dayType,
+  complete,
   onPress,
 }: {
   date: string;
@@ -228,10 +237,20 @@ function DayWheelItem({
   scrollX: SharedValue<number>;
   selected: boolean;
   dayType: DayWheelDayType | undefined;
+  complete: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
   const today = isToday(date);
+  const checkScale = useSharedValue(complete ? 1 : 0);
+
+  useEffect(() => {
+    checkScale.value = complete
+      ? withSequence(withTiming(1.3, { duration: 120 }), withSpring(1, SpringSnappy))
+      : withTiming(0, { duration: 120 });
+    // Only animate in response to `complete` actually flipping, not the initial mount value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complete]);
 
   const animatedStyle = useAnimatedStyle(() => {
     const distance = scrollX.value - index * ITEM_WIDTH;
@@ -240,6 +259,11 @@ function DayWheelItem({
     const opacity = interpolate(distance, [-range, 0, range], [0.4, 1, 0.4], Extrapolation.CLAMP);
     return { transform: [{ scale }], opacity };
   });
+
+  const checkBadgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+    opacity: checkScale.value,
+  }));
 
   return (
     <Pressable onPress={onPress} style={styles.item}>
@@ -257,6 +281,11 @@ function DayWheelItem({
             today ? { borderWidth: 1, borderColor: theme.accent } : null,
           ]}
         />
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.checkBadge, { backgroundColor: theme.success, borderColor: theme.background }, checkBadgeStyle]}>
+          <Icon name="check" size={10} color={theme.onAccent} />
+        </Animated.View>
       </Animated.View>
     </Pressable>
   );
@@ -289,5 +318,16 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginTop: 2,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
