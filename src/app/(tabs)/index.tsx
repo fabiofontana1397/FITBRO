@@ -19,7 +19,7 @@ import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
 import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekdayShort } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
-import { estimateDailyBurnedKcal, estimateDailyBurnedKcalBreakdown } from '@/lib/nutrition/targets';
+import { estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
@@ -94,7 +94,7 @@ export default function HomeScreen() {
   // day was actually completed — matching the same rule weekDays uses below.
   const todayTrainedThisDay =
     todayPlanDay?.type === 'workout' && workoutExercises.length > 0 && completedCount === workoutExercises.length;
-  const todayBurnBreakdown = estimateDailyBurnedKcalBreakdown({
+  const todayBurnedKcal = estimateDailyBurnedKcal({
     sex: currentUser.sex,
     ageRange: currentUser.ageRange,
     heightCm: currentUser.heightCm,
@@ -102,7 +102,7 @@ export default function HomeScreen() {
     jobActivity: onboardingAnswers.jobActivity as string | undefined,
     trainedThisDay: todayTrainedThisDay,
   });
-  const burnedProgress = calorieTarget > 0 ? Math.min(todayBurnBreakdown.total / calorieTarget, 1) : 0;
+  const burnedProgress = calorieTarget > 0 ? Math.min(todayBurnedKcal / calorieTarget, 1) : 0;
 
   // Week/month/year switches which fixed set of axis slots the chart shows
   // — days of this week, days of this month, months of this year — each
@@ -307,17 +307,7 @@ export default function HomeScreen() {
             </ProgressRing>
           </View>
           <View style={styles.legendColumn}>
-            <View style={{ gap: Spacing.one }}>
-              <OverviewLegendRow icon="training" color={theme.accent} label="Bruciate" value={`${Math.round(todayBurnBreakdown.total)} kcal`} />
-              <View style={styles.legendSubRows}>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Metabolismo basale: {Math.round(todayBurnBreakdown.basal)} kcal
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Allenamento: {Math.round(todayBurnBreakdown.training)} kcal
-                </ThemedText>
-              </View>
-            </View>
+            <OverviewLegendRow icon="training" color={theme.accent} label="Bruciate" value={`${Math.round(todayBurnedKcal)} kcal`} />
             <OverviewLegendRow icon="nutrition" color={theme.success} label="Assunte" value={`${Math.round(todaysTotals.kcal)} kcal`} />
           </View>
         </GlassSurface>
@@ -574,10 +564,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  legendSubRows: {
-    marginLeft: Spacing.four,
-    gap: 2,
   },
   nutritionCard: {
     padding: Spacing.four,
