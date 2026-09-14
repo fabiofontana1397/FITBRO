@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import { Text, View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { formatDayMonth } from '@/lib/mock/dates';
 
@@ -9,10 +9,11 @@ export type WeightPoint = { date: string; value: number };
 export type GoalTrendChartProps = {
   /** Actual logged weigh-ins so far, chronological. */
   history: WeightPoint[];
-  /** A possible future path toward the target given the current diet's
-   * calorie deficit/surplus — empty when there isn't enough info to
-   * project. Its first point should be the same as history's last point,
-   * so the dashed line continues seamlessly from the solid one. */
+  /** A guide toward the target given the diet plan's calorie deficit/
+   * surplus, one point per month (the weight the plan implies by the end
+   * of that month) — empty when there isn't enough info to project. Its
+   * first point should be the same as history's last point, so the
+   * dashed line continues seamlessly from the solid one. */
   projection: WeightPoint[];
   target: number;
   width?: number;
@@ -23,13 +24,22 @@ export type GoalTrendChartProps = {
   axisColor: string;
 };
 
-const PADDING_LEFT = 40;
-const PADDING_RIGHT = 10;
+const PADDING_LEFT = 42;
+const PADDING_RIGHT = 12;
 const PADDING_TOP = 16;
-const PADDING_BOTTOM = 22;
+const PADDING_BOTTOM = 24;
 
 function buildChart(history: WeightPoint[], projection: WeightPoint[], target: number, width: number, height: number) {
-  const empty = { historyPath: '', historyArea: '', projectionPath: '', lastPoint: undefined, targetY: height / 2, milestone: undefined, xTicks: [], yTicks: [] };
+  const empty = {
+    historyPath: '',
+    historyArea: '',
+    projectionPath: '',
+    lastPoint: undefined as { x: number; y: number } | undefined,
+    targetY: height / 2,
+    milestone: undefined as { x: number; y: number; date: string } | undefined,
+    xTicks: [] as { x: number; label: string; anchor: 'start' | 'middle' | 'end' }[],
+    yTicks: [] as { y: number; label: string }[],
+  };
   if (history.length < 2 || width <= 0) return empty;
 
   const allPoints = [...history, ...projection];
@@ -67,9 +77,9 @@ function buildChart(history: WeightPoint[], projection: WeightPoint[], target: n
   const milestoneIndex = projection.findIndex((p) => Math.abs(p.value - target) < 0.05);
   const milestone = milestoneIndex >= 0 ? { ...projectionXY[milestoneIndex], date: projection[milestoneIndex].date } : undefined;
 
-  const xTicks = [
-    { x: PADDING_LEFT, label: formatDayMonth(history[0].date), anchor: 'start' as const },
-    { x: lastPoint.x, label: 'Oggi', anchor: 'middle' as const },
+  const xTicks: { x: number; label: string; anchor: 'start' | 'middle' | 'end' }[] = [
+    { x: PADDING_LEFT, label: formatDayMonth(history[0].date), anchor: 'start' },
+    { x: lastPoint.x, label: 'Oggi', anchor: 'middle' },
     ...(projection.length
       ? [{ x: toX(projection[projection.length - 1].date), label: formatDayMonth(projection[projection.length - 1].date), anchor: 'end' as const }]
       : []),
@@ -84,10 +94,14 @@ function buildChart(history: WeightPoint[], projection: WeightPoint[], target: n
 }
 
 /** A weight trend chart that updates as new entries are logged: the solid
- * line is the actual history, the dashed line is a possible path toward
- * the target given the diet plan's current calorie deficit/surplus, and
- * the target itself is always marked — both as a reference line and, once
- * the projection reaches it, as its own milestone point. */
+ * line is the actual history, the dashed line is a guide toward the
+ * target — one point per month, at the weight the diet plan's calorie
+ * target for that month implies — and the target itself is always
+ * marked, both as a reference line and, once the guide reaches it, as its
+ * own milestone point. Axis value labels are plain React Native Text
+ * absolutely positioned over the SVG rather than SVG <Text> — the latter's
+ * baseline handling isn't consistent enough across web/iOS/Android to
+ * trust for something this small. */
 export function GoalTrendChart({
   history,
   projection,
@@ -114,80 +128,114 @@ export function GoalTrendChart({
   return (
     <View style={{ width: width ?? '100%', height }} onLayout={onLayout}>
       {chartWidth > 0 ? (
-        <Svg width={chartWidth} height={height}>
-          <Defs>
-            <LinearGradient id="goalTrendFill" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color} stopOpacity={0.28} />
-              <Stop offset="1" stopColor={color} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
+        <View style={{ width: chartWidth, height }}>
+          <Svg width={chartWidth} height={height}>
+            <Defs>
+              <LinearGradient id="goalTrendFill" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={color} stopOpacity={0.28} />
+                <Stop offset="1" stopColor={color} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
 
-          {/* Axes */}
-          <Line
-            x1={PADDING_LEFT}
-            y1={PADDING_TOP}
-            x2={PADDING_LEFT}
-            y2={height - PADDING_BOTTOM}
-            stroke={axisColor}
-            strokeWidth={1}
-          />
-          <Line
-            x1={PADDING_LEFT}
-            y1={height - PADDING_BOTTOM}
-            x2={chartWidth - PADDING_RIGHT}
-            y2={height - PADDING_BOTTOM}
-            stroke={axisColor}
-            strokeWidth={1}
-          />
-          {yTicks.map((tick, i) => (
-            <SvgText key={i} x={PADDING_LEFT - 6} y={tick.y + 4} fontSize={10} fill={axisColor} textAnchor="end">
-              {tick.label}
-            </SvgText>
-          ))}
-          {xTicks.map((tick, i) => (
-            <SvgText key={i} x={tick.x} y={height - 6} fontSize={10} fill={axisColor} textAnchor={tick.anchor}>
-              {tick.label}
-            </SvgText>
-          ))}
-
-          {/* Target reference line */}
-          <Line
-            x1={PADDING_LEFT}
-            y1={targetY}
-            x2={chartWidth - PADDING_RIGHT}
-            y2={targetY}
-            stroke={targetColor}
-            strokeWidth={1.5}
-            strokeDasharray="5 5"
-          />
-          <SvgText x={chartWidth - PADDING_RIGHT} y={targetY - 6} fontSize={10} fill={targetColor} textAnchor="end">
-            Obiettivo {target}kg
-          </SvgText>
-
-          {historyArea ? <Path d={historyArea} fill="url(#goalTrendFill)" /> : null}
-          {historyPath ? (
-            <Path d={historyPath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          ) : null}
-          {projectionPath ? (
-            <Path
-              d={projectionPath}
-              stroke={projectionColor}
-              strokeWidth={2}
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray="6 5"
+            {/* Axes */}
+            <Line x1={PADDING_LEFT} y1={PADDING_TOP} x2={PADDING_LEFT} y2={height - PADDING_BOTTOM} stroke={axisColor} strokeWidth={1} />
+            <Line
+              x1={PADDING_LEFT}
+              y1={height - PADDING_BOTTOM}
+              x2={chartWidth - PADDING_RIGHT}
+              y2={height - PADDING_BOTTOM}
+              stroke={axisColor}
+              strokeWidth={1}
             />
-          ) : null}
 
-          {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
-          {milestone ? (
-            <>
-              <Circle cx={milestone.x} cy={milestone.y} r={6} fill="none" stroke={targetColor} strokeWidth={2} />
-              <Circle cx={milestone.x} cy={milestone.y} r={3} fill={targetColor} />
-            </>
-          ) : null}
-        </Svg>
+            {/* Target reference line */}
+            <Line
+              x1={PADDING_LEFT}
+              y1={targetY}
+              x2={chartWidth - PADDING_RIGHT}
+              y2={targetY}
+              stroke={targetColor}
+              strokeWidth={1.5}
+              strokeDasharray="5 5"
+            />
+
+            {historyArea ? <Path d={historyArea} fill="url(#goalTrendFill)" /> : null}
+            {historyPath ? (
+              <Path d={historyPath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            ) : null}
+            {projectionPath ? (
+              <Path
+                d={projectionPath}
+                stroke={projectionColor}
+                strokeWidth={2}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="6 5"
+              />
+            ) : null}
+
+            {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
+            {milestone ? (
+              <>
+                <Circle cx={milestone.x} cy={milestone.y} r={6} fill="none" stroke={targetColor} strokeWidth={2} />
+                <Circle cx={milestone.x} cy={milestone.y} r={3} fill={targetColor} />
+              </>
+            ) : null}
+          </Svg>
+
+          {/* Target label */}
+          <Text
+            style={{
+              position: 'absolute',
+              right: PADDING_RIGHT,
+              top: Math.max(targetY - 16, 0),
+              fontSize: 10,
+              fontWeight: '700',
+              color: targetColor,
+            }}>
+            Obiettivo {target}kg
+          </Text>
+
+          {/* Y-axis value labels */}
+          {yTicks.map((tick, i) => (
+            <Text
+              key={i}
+              style={{
+                position: 'absolute',
+                left: 0,
+                width: PADDING_LEFT - 6,
+                top: tick.y - 7,
+                fontSize: 10,
+                color: axisColor,
+                textAlign: 'right',
+              }}>
+              {tick.label}
+            </Text>
+          ))}
+
+          {/* X-axis date labels */}
+          {xTicks.map((tick, i) => {
+            const boxWidth = 70;
+            const left = tick.anchor === 'start' ? tick.x : tick.anchor === 'end' ? tick.x - boxWidth : tick.x - boxWidth / 2;
+            const textAlign = tick.anchor === 'start' ? 'left' : tick.anchor === 'end' ? 'right' : 'center';
+            return (
+              <Text
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left,
+                  width: boxWidth,
+                  top: height - PADDING_BOTTOM + 6,
+                  fontSize: 10,
+                  color: axisColor,
+                  textAlign,
+                }}>
+                {tick.label}
+              </Text>
+            );
+          })}
+        </View>
       ) : null}
     </View>
   );

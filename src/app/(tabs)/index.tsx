@@ -101,45 +101,58 @@ export default function HomeScreen() {
 
   const weightHistory = useMemo(() => bodyEntries.map((e) => ({ date: e.date, value: e.weightKg })), [bodyEntries]);
 
-  // A possible future path toward the goal, driven by the SAME deficit/
-  // surplus the diet plan actually sets: recompute maintenance (TDEE) from
-  // the latest weight via the same formula onboarding used, then compare it
-  // against what the plan currently has the user eating — the gap between
-  // the two, at ~7700kcal per kg, is the weekly rate of change. Not a
-  // real forecast (a person's real trajectory never follows a straight
-  // line), just an illustration of where the current plan is heading.
+  // A guide toward the goal, one point per MONTH of the plan — "the weight
+  // this month's calorie target implies by its end" — rather than a single
+  // flat weekly rate: recomputes maintenance (TDEE) from the running
+  // projected weight via the same formula onboarding used, against THAT
+  // month's own calorie target (diet plans nudge month 1 easier, then hold
+  // steady — see diet-planner.ts monthCalorieTarget), compounding forward
+  // month by month. Not a real forecast, just an illustration of where the
+  // plan as currently set is heading.
   const weightProjection = useMemo(() => {
     const targetWeightKg = currentUser.targetWeightKg;
     if (Math.abs(latestBody.weightKg - targetWeightKg) < 0.05) return [];
 
-    const { tdee } = computeNutritionTargets({
-      sex: currentUser.sex,
-      ageRange: currentUser.ageRange,
-      heightCm: currentUser.heightCm,
-      currentWeightKg: latestBody.weightKg,
-      goal: currentUser.goal,
-      jobActivity: onboardingAnswers.jobActivity as string | undefined,
-      weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
-    });
+    const months = dietPlan
+      ? dietPlan.months.filter((m) => m.monthIndex >= currentMonthIndex(dietPlan)).map((m) => ({ calorieTarget: m.calorieTarget }))
+      : Array.from({ length: 6 }, () => ({ calorieTarget: currentUser.dailyCalorieTarget }));
 
-    const dailyDeficit = tdee - calorieTarget; // > 0 means eating below maintenance
-    const weeklyChangeKg = -(dailyDeficit * 7) / 7700; // ~7700kcal per kg of fat
-
-    const movingTowardTarget =
-      weeklyChangeKg < 0 ? targetWeightKg < latestBody.weightKg : weeklyChangeKg > 0 ? targetWeightKg > latestBody.weightKg : false;
-    if (!movingTowardTarget) return [];
-
-    const points = [{ date: today, value: latestBody.weightKg }];
+    const points: { date: string; value: number }[] = [{ date: today, value: latestBody.weightKg }];
     let weight = latestBody.weightKg;
-    for (let week = 1; week <= 26; week++) {
-      weight += weeklyChangeKg;
-      const reached = weeklyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
+    let cursorDate = today;
+
+    for (const month of months) {
+      const { tdee } = computeNutritionTargets({
+        sex: currentUser.sex,
+        ageRange: currentUser.ageRange,
+        heightCm: currentUser.heightCm,
+        currentWeightKg: weight,
+        goal: currentUser.goal,
+        jobActivity: onboardingAnswers.jobActivity as string | undefined,
+        weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
+      });
+      const dailyDeficit = tdee - month.calorieTarget;
+      const monthlyChangeKg = -(dailyDeficit * 30) / 7700; // ~7700kcal per kg of fat
+      cursorDate = addDaysISO(cursorDate, 30);
+
+      const movingTowardTarget = monthlyChangeKg < 0 ? targetWeightKg < weight : monthlyChangeKg > 0 ? targetWeightKg > weight : false;
+      if (!movingTowardTarget) {
+        // This month's own target wouldn't move things (e.g. month 1's
+        // gentler nudge) — hold flat and keep going, rather than cutting
+        // the whole guide short over one month.
+        points.push({ date: cursorDate, value: weight });
+        continue;
+      }
+
+      weight += monthlyChangeKg;
+      const reached = monthlyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
       if (reached) weight = targetWeightKg;
-      points.push({ date: addDaysISO(today, week * 7), value: weight });
+      points.push({ date: cursorDate, value: weight });
       if (reached) break;
     }
-    return points;
-  }, [currentUser, latestBody.weightKg, onboardingAnswers, calorieTarget, today]);
+
+    return points.length > 1 ? points : [];
+  }, [currentUser, latestBody.weightKg, onboardingAnswers, dietPlan, today]);
 
   // One entry per weekday of the CURRENT calendar week — past days read
   // from what was actually logged, today is live, and days still ahead

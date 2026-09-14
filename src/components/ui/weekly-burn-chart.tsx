@@ -34,10 +34,14 @@ const PADDING_TOP = 14;
 const PADDING_BOTTOM = 4;
 
 function buildLine(days: WeeklyBurnDay[], width: number, height: number) {
-  const known = days.filter((d) => d.hasHappened);
-  if (known.length < 2 || width <= 0) return { path: '', area: '', lastPoint: undefined, yTicks: [] as { y: number; label: string }[] };
+  const empty = { solidPath: '', area: '', dashedPath: '', lastPoint: undefined, yTicks: [] as { y: number; label: string }[] };
+  if (days.length < 2 || width <= 0) return empty;
 
-  const values = known.map((d) => d.burnedKcal);
+  // Every day already has an estimated burn (today/past from real data, days
+  // ahead from baseline BMR alone) — the chart always has something to draw
+  // even right after the week starts, rather than staying blank until
+  // several days have actually happened.
+  const values = days.map((d) => d.burnedKcal);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -47,26 +51,43 @@ function buildLine(days: WeeklyBurnDay[], width: number, height: number) {
   const stepX = plotWidth / (days.length - 1);
 
   const toY = (value: number) => PADDING_TOP + plotHeight * (1 - (value - min) / range);
+  const allPoints = days.map((d, i) => ({ x: PADDING_LEFT + i * stepX, y: toY(d.burnedKcal) }));
 
-  const knownIndices = days.map((d, i) => (d.hasHappened ? i : -1)).filter((i) => i >= 0);
-  const points = knownIndices.map((i) => ({ x: PADDING_LEFT + i * stepX, y: toY(days[i].burnedKcal) }));
+  let lastKnownIndex = -1;
+  days.forEach((d, i) => {
+    if (d.hasHappened) lastKnownIndex = i;
+  });
 
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
-  const area = `${path} L ${points[points.length - 1].x.toFixed(2)} ${height} L ${points[0].x.toFixed(2)} ${height} Z`;
+  const solidPoints = allPoints.slice(0, lastKnownIndex + 1);
+  // Starts at the last real day so the dashed line picks up exactly where
+  // the solid one ends, same as the goal-weight chart's projection.
+  const dashedPoints = allPoints.slice(Math.max(lastKnownIndex, 0));
+
+  const toPath = (points: { x: number; y: number }[]) =>
+    points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+
+  const solidPath = solidPoints.length >= 2 ? toPath(solidPoints) : '';
+  const area = solidPath
+    ? `${solidPath} L ${solidPoints[solidPoints.length - 1].x.toFixed(2)} ${height} L ${solidPoints[0].x.toFixed(2)} ${height} Z`
+    : '';
+  const dashedPath = dashedPoints.length >= 2 ? toPath(dashedPoints) : '';
 
   const yTicks = [
     { y: toY(max), label: `${Math.round(max)}` },
     { y: toY(min), label: `${Math.round(min)}` },
   ];
 
-  return { path, area, lastPoint: points[points.length - 1], yTicks };
+  return { solidPath, area, dashedPath, lastPoint: lastKnownIndex >= 0 ? allPoints[lastKnownIndex] : undefined, yTicks };
 }
 
 /** A week-at-a-glance card: a trend line of estimated daily calories
  * burned (basal metabolism plus a bump on days a planned workout was
- * actually completed), and below it one small concentric-ring badge per
- * weekday summarizing that day's training/diet/steps — days that haven't
- * happened yet simply read as empty rather than a fake plan hitting 0%. */
+ * actually completed) — solid through today, dashed for the rest of the
+ * week (baseline burn only, no workout bump yet) so the chart never sits
+ * empty right after the week starts — and below it one small concentric-
+ * ring badge per weekday summarizing that day's training/diet/steps; days
+ * that haven't happened yet simply read as empty rings rather than a fake
+ * plan hitting 0%. */
 export function WeeklyBurnChart({
   days,
   color,
@@ -83,7 +104,7 @@ export function WeeklyBurnChart({
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const chartWidth = width ?? measuredWidth;
 
-  const { path, area, lastPoint, yTicks } = useMemo(() => buildLine(days, chartWidth, height), [days, chartWidth, height]);
+  const { solidPath, area, dashedPath, lastPoint, yTicks } = useMemo(() => buildLine(days, chartWidth, height), [days, chartWidth, height]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
@@ -106,7 +127,12 @@ export function WeeklyBurnChart({
               </SvgText>
             ))}
             {area ? <Path d={area} fill="url(#weeklyBurnFill)" /> : null}
-            {path ? <Path d={path} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
+            {dashedPath ? (
+              <Path d={dashedPath} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 5" />
+            ) : null}
+            {solidPath ? (
+              <Path d={solidPath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            ) : null}
             {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
           </Svg>
         ) : null}
