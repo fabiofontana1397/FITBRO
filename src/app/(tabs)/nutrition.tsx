@@ -21,7 +21,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { TimingSlow } from '@/constants/motion';
 import { useStoreHydrated } from '@/hooks/use-store-hydrated';
 import { useTheme } from '@/hooks/use-theme';
-import { addDaysISO, currentWeekDates, daysAgoISO } from '@/lib/mock/dates';
+import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { findFood } from '@/lib/mock/food-database';
 import { currentMonthIndex, currentMonthProgress } from '@/lib/planning/plan-progress';
 import {
@@ -32,6 +32,7 @@ import {
   sumMacros,
   targetsForSlot,
   useNutritionStore,
+  type MealFoodEntry,
   type MealSlot,
 } from '@/store/nutrition-store';
 import { useOnboardingStore } from '@/store/onboarding-store';
@@ -43,10 +44,12 @@ export default function NutritionScreen() {
   const currentUser = useUserStore();
   const entries = useNutritionStore((s) => s.entries);
   const removeEntry = useNutritionStore((s) => s.removeEntry);
+  const seedDayFromPlan = useNutritionStore((s) => s.seedDayFromPlan);
   const dietPlan = usePlanStore((s) => s.dietPlan);
   const generatePlans = usePlanStore((s) => s.generatePlans);
   const onboardingAnswers = useOnboardingStore((s) => s.answers);
   const [activeSlot, setActiveSlot] = useState<MealSlot | null>(null);
+  const [editingEntry, setEditingEntry] = useState<MealFoodEntry | null>(null);
   const [selectedDate, setSelectedDate] = useState(daysAgoISO(0));
 
   const planStoreHydrated = useStoreHydrated(usePlanStore);
@@ -72,6 +75,18 @@ export default function NutritionScreen() {
   const monthIndex = dietPlan ? currentMonthIndex(dietPlan) : 1;
   const currentMonthData = dietPlan?.months.find((m) => m.monthIndex === monthIndex);
   const monthProgress = dietPlan ? currentMonthProgress(dietPlan) : null;
+
+  useEffect(() => {
+    // Pre-fills the day's meal boxes with the plan's own foods/grams the
+    // first time this date is opened, so the user starts from "already
+    // planned" instead of an empty log — still fully editable afterward
+    // (seedDayFromPlan no-ops once a date has been seeded, so deleting
+    // everything back out doesn't bring it right back).
+    if (!currentMonthData) return;
+    const planDay = currentMonthData.weeklySplit[mondayIndex(new Date(selectedDate))];
+    if (!planDay) return;
+    seedDayFromPlan(selectedDate, planDay.meals);
+  }, [selectedDate, currentMonthData, seedDayFromPlan]);
 
   const weekDates = useMemo(() => currentWeekDates(new Date(selectedDate)), [selectedDate]);
   const loggedDates = useMemo(() => new Set(entries.map((e) => e.date)), [entries]);
@@ -145,47 +160,50 @@ export default function NutritionScreen() {
         )}
       </GlassSurface>
 
-      <Animated.View style={heroAnimatedStyle}>
-        <GlassSurface level="raised" radius={Radius.xlarge} style={styles.overviewCard}>
-          <DayNavigator
-            date={selectedDate}
-            onPrev={() => setSelectedDate((d) => addDaysISO(d, -1))}
-            onNext={() => setSelectedDate((d) => addDaysISO(d, 1))}
-          />
-          <NutritionWeekStrip dates={weekDates} loggedDates={loggedDates} selectedDate={selectedDate} onSelect={setSelectedDate} />
-          <LoggingStreakBanner streak={streakInfo.streak} gapDays={streakInfo.gapDays} />
+      <View>
+        <SectionHeader title="Traccia le tue calorie giornaliere" />
+        <Animated.View style={heroAnimatedStyle}>
+          <GlassSurface level="raised" radius={Radius.xlarge} style={styles.overviewCard}>
+            <DayNavigator
+              date={selectedDate}
+              onPrev={() => setSelectedDate((d) => addDaysISO(d, -1))}
+              onNext={() => setSelectedDate((d) => addDaysISO(d, 1))}
+            />
+            <NutritionWeekStrip dates={weekDates} loggedDates={loggedDates} selectedDate={selectedDate} onSelect={setSelectedDate} />
+            <LoggingStreakBanner streak={streakInfo.streak} gapDays={streakInfo.gapDays} />
 
-          <View style={styles.heroDivider} />
+            <View style={styles.heroDivider} />
 
-          <View style={styles.heroRingsBlock}>
-            <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-              <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                / {currentUser.dailyCalorieTarget} kcal
-              </ThemedText>
-            </ProgressRing>
-            <View style={styles.macroRingsRow}>
-              {macroRings.map((macro) => {
-                const value = totals[macro.key];
-                const progress = Math.min(value / macro.target, 1);
-                return (
-                  <View key={macro.key} style={styles.macroRingCol}>
-                    <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
-                      <Icon name={macro.icon} size={16} color={macro.color} />
-                    </ProgressRing>
-                    <ThemedText type="caption" style={{ marginTop: 4 }}>
-                      {Math.round(value)}/{macro.target}g
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {macro.label}
-                    </ThemedText>
-                  </View>
-                );
-              })}
+            <View style={styles.heroRingsBlock}>
+              <ProgressRing size={116} strokeWidth={11} progress={calorieProgress} color={theme.accent} trackColor={theme.backgroundElement}>
+                <ThemedText type="title">{Math.round(totals.kcal)}</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  / {currentUser.dailyCalorieTarget} kcal
+                </ThemedText>
+              </ProgressRing>
+              <View style={styles.macroRingsRow}>
+                {macroRings.map((macro) => {
+                  const value = totals[macro.key];
+                  const progress = Math.min(value / macro.target, 1);
+                  return (
+                    <View key={macro.key} style={styles.macroRingCol}>
+                      <ProgressRing size={56} strokeWidth={6} progress={progress} color={macro.color} trackColor={theme.backgroundElement}>
+                        <Icon name={macro.icon} size={16} color={macro.color} />
+                      </ProgressRing>
+                      <ThemedText type="caption" style={{ marginTop: 4 }}>
+                        {Math.round(value)}/{macro.target}g
+                      </ThemedText>
+                      <ThemedText type="caption" themeColor="textSecondary">
+                        {macro.label}
+                      </ThemedText>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        </GlassSurface>
-      </Animated.View>
+          </GlassSurface>
+        </Animated.View>
+      </View>
 
       <View>
         <SectionHeader title="I tuoi pasti" />
@@ -209,7 +227,12 @@ export default function NutritionScreen() {
                       {meta.time} · {Math.round(slotTotals.kcal)}/{Math.round(target.kcal)} kcal
                     </ThemedText>
                   </View>
-                  <Pressable onPress={() => setActiveSlot(meta.id)} style={[styles.addButton, { backgroundColor: theme.accentSoft }]}>
+                  <Pressable
+                    onPress={() => {
+                      setEditingEntry(null);
+                      setActiveSlot(meta.id);
+                    }}
+                    style={[styles.addButton, { backgroundColor: theme.accentSoft }]}>
                     <Icon name="plus" size={18} color={theme.accent} />
                   </Pressable>
                 </View>
@@ -234,9 +257,16 @@ export default function NutritionScreen() {
                       const m = macrosForEntry(entry);
                       return (
                         <View key={entry.id} style={styles.foodRow}>
-                          <ThemedText type="caption" style={{ flex: 1 }}>
-                            {food?.name ?? entry.foodId} · {entry.grams}g
-                          </ThemedText>
+                          <Pressable
+                            style={{ flex: 1 }}
+                            onPress={() => {
+                              setEditingEntry(entry);
+                              setActiveSlot(meta.id);
+                            }}>
+                            <ThemedText type="caption">
+                              {food?.name ?? entry.foodId} · {entry.grams}g
+                            </ThemedText>
+                          </Pressable>
                           <ThemedText type="caption" themeColor="textSecondary">
                             {Math.round(m.kcal)} kcal
                           </ThemedText>
@@ -258,7 +288,16 @@ export default function NutritionScreen() {
         </View>
       </View>
 
-      <FoodSearchModal visible={activeSlot != null} slot={activeSlot} date={selectedDate} onClose={() => setActiveSlot(null)} />
+      <FoodSearchModal
+        visible={activeSlot != null}
+        slot={activeSlot}
+        date={selectedDate}
+        editEntry={editingEntry}
+        onClose={() => {
+          setActiveSlot(null);
+          setEditingEntry(null);
+        }}
+      />
     </ScreenScroll>
   );
 }

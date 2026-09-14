@@ -78,7 +78,7 @@ function buildSubstitutes(pool: string[], seed: number, primaryId: string, targe
     const food = findFood(id);
     if (!food) continue;
     const grams = round5((targetKcal / food.kcal100) * 100);
-    substitutes.push({ name: food.name, grams });
+    substitutes.push({ name: food.name, grams, foodId: food.id });
   }
   return substitutes.length > 0 ? substitutes : undefined;
 }
@@ -92,6 +92,7 @@ function buildItem(pool: string[], seed: number, targetKcal: number, portionOver
     name: food.name,
     grams,
     kcal,
+    foodId: primaryId,
     // Substitutes match the *actual* kcal this item ended up at (not the
     // raw target), so a fixed-portion item (veg/fruit) still gets swaps
     // sized to roughly the same calories rather than a near-zero portion.

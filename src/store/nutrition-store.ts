@@ -34,46 +34,43 @@ export type MealFoodEntry = {
 
 export type Macros = { kcal: number; protein: number; carbs: number; fats: number };
 
-function seedEntries(): MealFoodEntry[] {
-  const today = daysAgoISO(0);
-  const rows: [MealSlot, string, number][] = [
-    ['colazione', 'oats', 60],
-    ['colazione', 'greek-yogurt', 170],
-    ['colazione', 'blueberries', 100],
-    ['colazione', 'honey', 15],
-    ['spuntinoMattina', 'whey-protein', 30],
-    ['spuntinoMattina', 'banana', 120],
-    ['pranzo', 'chicken-breast', 150],
-    ['pranzo', 'rice-basmati', 200],
-    ['pranzo', 'broccoli', 200],
-    ['pranzo', 'olive-oil', 10],
-    ['spuntinoPomeriggio', 'puffed-rice', 30],
-    ['spuntinoPomeriggio', 'jam', 20],
-  ];
-  return rows.map(([slot, foodId, grams], i) => ({
-    id: `seed-${i}`,
-    date: today,
-    slot,
-    foodId,
-    grams,
-  }));
-}
-
 type NutritionState = {
   entries: MealFoodEntry[];
+  /** Dates already pre-filled from the diet plan (see seedDayFromPlan) — kept
+   * so a day the user has since emptied out on purpose never gets re-filled. */
+  seededDates: string[];
   addEntry: (slot: MealSlot, foodId: string, grams: number, date?: string) => void;
+  updateEntry: (id: string, foodId: string, grams: number) => void;
   removeEntry: (id: string) => void;
+  seedDayFromPlan: (date: string, dayMeals: { slotId: string; items: { foodId: string; grams: number }[] }[]) => void;
 };
 
 export const useNutritionStore = create<NutritionState>()(
   persist(
     (set) => ({
-      entries: seedEntries(),
+      entries: [],
+      seededDates: [],
       addEntry: (slot, foodId, grams, date = daysAgoISO(0)) =>
         set((state) => ({
           entries: [...state.entries, { id: `${foodId}-${Date.now()}`, date, slot, foodId, grams }],
         })),
+      updateEntry: (id, foodId, grams) =>
+        set((state) => ({ entries: state.entries.map((e) => (e.id === id ? { ...e, foodId, grams } : e)) })),
       removeEntry: (id) => set((state) => ({ entries: state.entries.filter((e) => e.id !== id) })),
+      seedDayFromPlan: (date, dayMeals) =>
+        set((state) => {
+          if (state.seededDates.includes(date)) return state;
+          const newEntries: MealFoodEntry[] = dayMeals.flatMap((meal) =>
+            meal.items.map((item, i) => ({
+              id: `plan-${date}-${meal.slotId}-${i}`,
+              date,
+              slot: meal.slotId as MealSlot,
+              foodId: item.foodId,
+              grams: item.grams,
+            }))
+          );
+          return { entries: [...state.entries, ...newEntries], seededDates: [...state.seededDates, date] };
+        }),
     }),
     { name: 'fitbro/nutrition', storage: appJsonStorage }
   )
