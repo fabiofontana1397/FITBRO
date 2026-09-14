@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
 type Petal = {
@@ -30,18 +31,22 @@ const PETALS: Petal[] = [
   { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], orbitDuration: 2200, direction: 1, phase: 4.8, freqRatio: 1.15, pulseDuration: 1050, pulseDelay: 550 },
 ];
 
-// Ring sizes (fraction of the blob) and opacities shared by every petal —
-// biggest/dimmest ring outermost, smallest/brightest innermost. Five steps
-// (rather than three) approximate a soft radial falloff purely through
-// layered flat circles — no blur filter involved. A BlurView used to sit
-// on top for the same effect, but on-device its backdrop plainly wasn't
-// re-sampling every frame: the orb only visibly changed when something
-// else (a scroll) forced the view to re-composite, otherwise looking
-// frozen. Building the softness directly out of real, separately-painted
-// layers instead means there's nothing that needs a live backdrop sample
-// to update — the pixels are what's animating.
-const RING_SCALES = [1, 0.82, 0.63, 0.44, 0.24];
-const RING_OPACITIES = [0.22, 0.36, 0.52, 0.72, 0.95];
+// Gradient stops shared by every petal's radial fill — bright center
+// easing through the mid tone and fading all the way to transparent at
+// the rim, so petals blend into the sphere and into each other with no
+// hard edge (the stacked-rings approximation used before still showed
+// visible concentric bands). A real SVG radialGradient does this
+// natively — still just plain pixels being painted, so (like the ring
+// version it replaces, and unlike the BlurView before that) there's no
+// separate compositing pass that can go stale on-device.
+// colorIndex picks which of the petal's 3 colors [edge, mid, center] each
+// stop uses; opacity fades to 0 by the last stop.
+const GRADIENT_STOPS = [
+  { offset: '0%', colorIndex: 2, opacity: 1 },
+  { offset: '45%', colorIndex: 1, opacity: 0.85 },
+  { offset: '75%', colorIndex: 0, opacity: 0.45 },
+  { offset: '100%', colorIndex: 0, opacity: 0 },
+];
 
 // How far (px) the whole petal group drifts toward the phone's tilt — a
 // liquid-in-a-ball feel, on top of (not instead of) the petals' own
@@ -66,7 +71,7 @@ export function ChatOrb({ size }: { size: number }) {
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF5A1F' }}>
       <Animated.View style={[styles.layer, tiltStyle]}>
         {PETALS.map((petal, i) => (
-          <PetalLayer key={i} petal={petal} size={size} />
+          <PetalLayer key={i} petal={petal} size={size} index={i} />
         ))}
       </Animated.View>
       {/* A static (non-animated) glass sheen — never needs to be
@@ -121,7 +126,7 @@ function useTiltShift() {
   return { tiltX, tiltY };
 }
 
-function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
+function PetalLayer({ petal, size, index }: { petal: Petal; size: number; index: number }) {
   const orbit = useSharedValue(0);
   const pulse = useSharedValue(0);
 
@@ -153,28 +158,20 @@ function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
   });
 
   const blobSize = size * 0.6;
+  const gradientId = `chatOrbPetal${index}`;
 
   return (
     <Animated.View style={[styles.layer, style]}>
-      <View style={{ position: 'absolute', width: blobSize, height: blobSize, alignItems: 'center', justifyContent: 'center' }}>
-        {RING_SCALES.map((scale, i) => {
-          const ringSize = blobSize * scale;
-          const colorIndex = i < 2 ? 0 : i < 4 ? 1 : 2;
-          return (
-            <View
-              key={i}
-              style={{
-                position: 'absolute',
-                width: ringSize,
-                height: ringSize,
-                borderRadius: ringSize / 2,
-                backgroundColor: petal.colors[colorIndex],
-                opacity: RING_OPACITIES[i],
-              }}
-            />
-          );
-        })}
-      </View>
+      <Svg width={blobSize} height={blobSize} style={{ position: 'absolute' }}>
+        <Defs>
+          <RadialGradient id={gradientId} cx="50%" cy="50%" r="50%">
+            {GRADIENT_STOPS.map((stop, i) => (
+              <Stop key={i} offset={stop.offset} stopColor={petal.colors[stop.colorIndex]} stopOpacity={stop.opacity} />
+            ))}
+          </RadialGradient>
+        </Defs>
+        <Circle cx={blobSize / 2} cy={blobSize / 2} r={blobSize / 2} fill={`url(#${gradientId})`} />
+      </Svg>
     </Animated.View>
   );
 }

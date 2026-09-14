@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { SpringSnappy } from '@/constants/motion';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
 // Matches ChatFab's own DEFAULT_SIZE fallback, used before the bar's real
@@ -47,21 +49,25 @@ export default function AppTabs({ onBarHeightChange }: { onBarHeightChange?: (he
   );
 }
 
-/** Fades scrolled content to the background color well before it would
- * reach the floating bar, instead of it staying crisp and peeking through
- * the bar's translucent glass — text only turns fully legible once the
- * user has scrolled it above this zone, clear of the bar entirely. Sits
- * above the screen content but below the bar itself, and never intercepts
- * touches (the scroll view underneath keeps handling them). */
+/** Blurs, then fades, scrolled content well before it would reach the
+ * floating bar, instead of it staying crisp and peeking through the bar's
+ * translucent glass — text only turns fully legible once the user has
+ * scrolled it above this zone, clear of the bar entirely. Sits above the
+ * screen content but below the bar itself, and never intercepts touches
+ * (the scroll view underneath keeps handling them). */
 function ScrollFadeMask() {
   const theme = useTheme();
+  const isDark = useColorScheme() === 'dark';
   return (
-    <LinearGradient
-      pointerEvents="none"
-      colors={['transparent', theme.background]}
-      locations={[0, 0.6]}
-      style={[styles.fadeMask, { height: FADE_HEIGHT }]}
-    />
+    <View pointerEvents="none" style={[styles.fadeMask, { height: FADE_HEIGHT }]}>
+      <BlurView
+        intensity={Platform.OS === 'web' ? 18 : 28}
+        tint={isDark ? 'dark' : 'light'}
+        blurMethod="dimezisBlurViewSdk31Plus"
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient colors={['transparent', theme.background]} locations={[0, 0.6]} style={StyleSheet.absoluteFill} />
+    </View>
   );
 }
 
