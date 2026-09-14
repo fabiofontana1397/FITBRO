@@ -28,7 +28,7 @@ export function ChatFab({ size }: { size?: number | null }) {
   const insets = useSafeAreaInsets();
   const bottomOffset = Platform.select({ web: Spacing.four, default: insets.bottom || Spacing.three });
   const buttonSize = size ?? DEFAULT_SIZE;
-  const orbSize = Math.round(buttonSize * 0.66);
+  const orbSize = Math.round(buttonSize * 0.9);
 
   return (
     <Pressable

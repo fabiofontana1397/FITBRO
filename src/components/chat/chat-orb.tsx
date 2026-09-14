@@ -1,52 +1,104 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { Accelerometer } from 'expo-sensors';
 import { BlurView } from 'expo-blur';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 type Petal = { colors: [string, string, string]; duration: number; direction: 1 | -1; baseAngle: number };
 
 // Three oversized, soft-edged "petals" at 0/120/240° like a flower, each
-// its own shade of orange-to-white, each spinning at its own speed/
-// direction — the interference between them (not a single rotating
-// image), then blurred by the BlurView on top, is what turns flat shapes
-// into the soft glowing-plasma look of the reference photo rather than a
-// flat graphic flower. Each petal is concentric rings of the SAME hue
-// shading from a rich orange at the edge to near-white at the center, not
-// a flat fill — a real radial gradient rather than a linear one, so it
-// reads as soft light regardless of the angle it's currently rotated to.
+// its own shade of orange, each spinning at its own speed/direction — the
+// interference between them (not a single rotating image), then blurred
+// by the BlurView on top, is what turns flat shapes into the soft
+// glowing-plasma look rather than a flat graphic flower. Each petal is
+// concentric rings of the SAME hue shading from a rich orange at the edge
+// to a pale warm cream at the center (never pure white) — a real radial
+// gradient rather than a linear one, so it reads as soft light regardless
+// of the angle it's currently rotated to.
 const PETALS: Petal[] = [
-  { colors: ['#FF7A33', '#FFC79B', '#FFFFFF'], duration: 9000, direction: 1, baseAngle: 20 },
-  { colors: ['#FF5A1F', '#FFA35C', '#FFF3E6'], duration: 13000, direction: -1, baseAngle: 140 },
-  { colors: ['#E6480F', '#FF8A46', '#FFFFFF'], duration: 17000, direction: 1, baseAngle: 260 },
+  { colors: ['#FF7A33', '#FFC79B', '#FFE3C4'], duration: 5200, direction: 1, baseAngle: 20 },
+  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], duration: 7400, direction: -1, baseAngle: 140 },
+  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], duration: 9200, direction: 1, baseAngle: 260 },
 ];
 
 // Ring sizes (fraction of the blob) and opacities shared by every petal —
 // biggest/dimmest ring outermost, smallest/brightest innermost, so each
 // blob reads as a soft radial glow rather than a flat-filled oval.
 const RING_SCALES = [1, 0.72, 0.42];
-const RING_OPACITIES = [0.32, 0.58, 0.85];
+const RING_OPACITIES = [0.34, 0.6, 0.88];
+
+// How far (px) the whole petal group drifts toward the phone's tilt — a
+// liquid-in-a-ball feel, on top of (not instead of) the petals' own
+// constant spinning. Silently stays at rest wherever the accelerometer
+// isn't available (web without permission, desktop, etc).
+const TILT_RANGE = 10;
 
 /** A small "living" AI entity standing in for a literal chat-bubble icon:
- * a warm orange-and-white glass sphere with three shades of orange
- * swirling independently behind a soft blur (which is what fuses flat
- * shapes into a diffuse glow), around a pulsing white core — never
- * settling into a static image. */
+ * a warm orange glass sphere with three shades of orange swirling
+ * independently behind a soft blur (which is what fuses flat shapes into
+ * a diffuse glow) — never settling into a static image, and drifting
+ * toward whichever way the phone is tilted. */
 export function ChatOrb({ size }: { size: number }) {
+  const { tiltX, tiltY } = useTiltShift();
+
+  const tiltStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tiltX.value }, { translateY: tiltY.value }],
+  }));
+
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF5A1F' }}>
-      {PETALS.map((petal, i) => (
-        <PetalLayer key={i} petal={petal} size={size} />
-      ))}
+      <Animated.View style={[styles.layer, tiltStyle]}>
+        {PETALS.map((petal, i) => (
+          <PetalLayer key={i} petal={petal} size={size} />
+        ))}
+      </Animated.View>
       <BlurView
         intensity={Platform.OS === 'web' ? 28 : 45}
         tint="light"
         style={StyleSheet.absoluteFill}
         blurMethod="dimezisBlurViewSdk31Plus"
       />
-      <CoreGlow size={size} />
       <View pointerEvents="none" style={[styles.rim, { borderRadius: size / 2 }]} />
     </View>
   );
+}
+
+/** Reads the accelerometer's gravity vector (x/y, in g) and eases two
+ * shared values toward it scaled to a small pixel range — the offset the
+ * whole petal group drifts by. Subscribes only while mounted; if the
+ * sensor never reports (unsupported platform, permission refused), the
+ * values simply stay at 0 and the orb reads exactly as it would without
+ * this feature. */
+function useTiltShift() {
+  const tiltX = useSharedValue(0);
+  const tiltY = useSharedValue(0);
+  const subscriptionRef = useRef<{ remove: () => void } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Accelerometer.isAvailableAsync()
+      .then((isAvailable) => {
+        if (cancelled || !isAvailable) return;
+        Accelerometer.setUpdateInterval(100);
+        subscriptionRef.current = Accelerometer.addListener(({ x, y }) => {
+          tiltX.value = withTiming(Math.max(-1, Math.min(1, x)) * TILT_RANGE, { duration: 220 });
+          tiltY.value = withTiming(Math.max(-1, Math.min(1, y)) * -TILT_RANGE, { duration: 220 });
+        });
+      })
+      .catch(() => {
+        // No accelerometer access (web without permission, unsupported
+        // device) — the orb just keeps its base spin, no tilt drift.
+      });
+
+    return () => {
+      cancelled = true;
+      subscriptionRef.current?.remove();
+      subscriptionRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { tiltX, tiltY };
 }
 
 function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
@@ -85,48 +137,6 @@ function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
           );
         })}
       </View>
-    </Animated.View>
-  );
-}
-
-// Same dim-edge/bright-core ring trick as the petals, in white, with more
-// steps for an especially smooth falloff — this is the sphere's one crisp
-// focal point, so it needs to read as gradual light, not a flat disc.
-const CORE_RING_SCALES = [1, 0.8, 0.62, 0.44, 0.26];
-const CORE_RING_OPACITIES = [0.1, 0.22, 0.4, 0.65, 1];
-
-function CoreGlow({ size }: { size: number }) {
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }), -1, true);
-  }, [pulse]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.8, 1]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.88, 1.06]) }],
-  }));
-
-  const coreSize = size * 0.52;
-
-  return (
-    <Animated.View pointerEvents="none" style={[styles.layer, style]}>
-      {CORE_RING_SCALES.map((scale, i) => {
-        const ringSize = coreSize * scale;
-        return (
-          <View
-            key={i}
-            style={{
-              position: 'absolute',
-              width: ringSize,
-              height: ringSize,
-              borderRadius: ringSize / 2,
-              backgroundColor: '#ffffff',
-              opacity: CORE_RING_OPACITIES[i],
-            }}
-          />
-        );
-      })}
     </Animated.View>
   );
 }
