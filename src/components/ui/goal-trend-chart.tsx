@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
+import { ScrollView, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
 /** One axis slot (a day/week/month depending on the selected range).
  * `value` is null when nothing was logged for that slot — the slot still
  * gets its gridline/label, it just has no dot and isn't connected into the
- * trend line across the gap. */
-export type WeightPoint = { xLabel: string; value: number | null };
+ * trend line across the gap. `date` is that slot's real calendar date (the
+ * 1st of the month for "anno" slots) — used only to build the "1-30
+ * settembre" style period caption, never for x positioning. */
+export type WeightPoint = { xLabel: string; value: number | null; date: string };
 
 export type GoalTrendChartProps = {
   points: WeightPoint[];
   target: number;
+  /** Whether each point represents a single day or a whole month — changes
+   * how the period caption below the chart is worded. */
+  dateGranularity: 'day' | 'month';
   width?: number;
   height?: number;
   color: string;
@@ -32,6 +37,7 @@ const Y_TICK_COUNT = 4;
 // many slots (e.g. 28-31 days in "Mese") — the plot then becomes wider than
 // the card and scrolls instead of squeezing everything together.
 const MIN_SLOT_WIDTH = 40;
+const PERIOD_LABEL_HEIGHT = 20;
 
 type XY = { x: number; y: number; value: number };
 
@@ -101,6 +107,48 @@ function buildChart(points: WeightPoint[], target: number, plotWidth: number, he
   return { segments, xy: xy.filter((p): p is XY => p != null), targetY: toY(target), xTicks, yTicks };
 }
 
+/** i -> the slot's fractional x position, inverted back to a slot index —
+ * used to figure out which slots are currently scrolled into view. */
+function slotIndexAt(x: number, pointCount: number, innerWidth: number) {
+  if (pointCount <= 1 || innerWidth <= 0) return 0;
+  const t = (x - INSET_LEFT) / innerWidth;
+  return Math.max(0, Math.min(pointCount - 1, Math.round(t * (pointCount - 1))));
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** "1-30 settembre" / "29 settembre - 3 ottobre" / "14 settembre". */
+function formatDayRange(startISO: string, endISO: string) {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const month = (d: Date) => d.toLocaleDateString('it-IT', { month: 'long' });
+
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return start.getDate() === end.getDate() ? `${start.getDate()} ${month(start)}` : `${start.getDate()}-${end.getDate()} ${month(start)}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${start.getDate()} ${month(start)} - ${end.getDate()} ${month(end)}`;
+  }
+  return `${start.getDate()} ${month(start)} ${start.getFullYear()} - ${end.getDate()} ${month(end)} ${end.getFullYear()}`;
+}
+
+/** "Gennaio - Giugno 2026" / "Settembre 2026". */
+function formatMonthRange(startISO: string, endISO: string) {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const month = (d: Date) => capitalize(d.toLocaleDateString('it-IT', { month: 'long' }));
+
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return `${month(start)} ${start.getFullYear()}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${month(start)} - ${month(end)} ${start.getFullYear()}`;
+  }
+  return `${month(start)} ${start.getFullYear()} - ${month(end)} ${end.getFullYear()}`;
+}
+
 /** A weight trend chart matching the familiar Health-app look: horizontal
  * gridlines with value labels, vertical dashed gridlines per x tick, a
  * solid trend line with a value label at every dot (not just the last),
@@ -108,14 +156,16 @@ function buildChart(points: WeightPoint[], target: number, plotWidth: number, he
  * even for slots with nothing logged yet, so the chart never looks broken
  * before there's data. Dense ranges (e.g. every day of the month) get a
  * wider-than-the-card plot the user scrolls horizontally, while the kg
- * scale on the left stays fixed. Axis/value labels are plain React Native
- * Text absolutely positioned over the SVG rather than SVG <Text> — the
- * latter's baseline handling isn't consistent enough across web/iOS/Android
- * to trust for something this small. */
-export function GoalTrendChart({ points, target, width, height = 240, color, targetColor, axisColor, gridColor }: GoalTrendChartProps) {
+ * scale on the left stays fixed and a caption below the chart tracks which
+ * days/months are currently scrolled into view. Axis/value labels are
+ * plain React Native Text absolutely positioned over the SVG rather than
+ * SVG <Text> — the latter's baseline handling isn't consistent enough
+ * across web/iOS/Android to trust for something this small. */
+export function GoalTrendChart({ points, target, dateGranularity, width, height = 240, color, targetColor, axisColor, gridColor }: GoalTrendChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const containerWidth = width ?? measuredWidth;
   const plotWidth = Math.max(containerWidth - GUTTER_WIDTH, points.length * MIN_SLOT_WIDTH);
+  const innerWidth = plotWidth - INSET_LEFT - INSET_RIGHT;
 
   const { segments, xy, targetY, xTicks, yTicks } = useMemo(() => buildChart(points, target, plotWidth, height), [points, target, plotWidth, height]);
 
@@ -123,134 +173,161 @@ export function GoalTrendChart({ points, target, width, height = 240, color, tar
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
   };
 
+  const visibleWidth = Math.max(containerWidth - GUTTER_WIDTH, 0);
+  const [visibleRange, setVisibleRange] = useState({ first: 0, last: 0 });
+  const updateVisibleRange = (scrollX: number) => {
+    setVisibleRange({
+      first: slotIndexAt(scrollX, points.length, innerWidth),
+      last: slotIndexAt(scrollX + visibleWidth, points.length, innerWidth),
+    });
+  };
+
   // Switching range (e.g. Settimana -> Mese) swaps in a whole new set of
-  // slots — jump the scroll back to the start rather than keeping whatever
-  // offset was left over from the previous range's plot.
+  // slots — jump the scroll back to the start and recompute what's visible,
+  // rather than keeping whatever offset/caption was left from the previous
+  // range's plot.
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo({ x: 0, animated: false });
-  }, [points]);
+    updateVisibleRange(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, plotWidth, visibleWidth]);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => updateVisibleRange(e.nativeEvent.contentOffset.x);
+
+  const first = points[visibleRange.first];
+  const last = points[visibleRange.last];
+  const periodLabel = first && last ? (dateGranularity === 'day' ? formatDayRange(first.date, last.date) : formatMonthRange(first.date, last.date)) : '';
 
   return (
-    <View style={{ width: width ?? '100%', height }} onLayout={onLayout}>
+    <View style={{ width: width ?? '100%', height: height + PERIOD_LABEL_HEIGHT }} onLayout={onLayout}>
       {containerWidth > 0 ? (
-        <View style={{ flexDirection: 'row', height }}>
-          {/* Fixed y-axis gutter, stays put while the plot scrolls under it */}
-          <View style={{ width: GUTTER_WIDTH, height }}>
-            {yTicks.map((tick, i) => (
-              <Text
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  width: GUTTER_WIDTH - 6,
-                  top: tick.y - 7,
-                  fontSize: 10,
-                  color: axisColor,
-                  textAlign: 'right',
-                }}>
-                {tick.label}
-              </Text>
-            ))}
-          </View>
-
-          <ScrollView
-            ref={scrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ width: Math.max(containerWidth - GUTTER_WIDTH, 0) }}
-            contentContainerStyle={{ width: plotWidth }}>
-            <View style={{ width: plotWidth, height }}>
-              <Svg width={plotWidth} height={height}>
-                <Defs>
-                  <LinearGradient id="goalTrendFill" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor={color} stopOpacity={0.28} />
-                    <Stop offset="1" stopColor={color} stopOpacity={0} />
-                  </LinearGradient>
-                </Defs>
-
-                {/* Horizontal gridlines */}
-                {yTicks.map((tick, i) => (
-                  <Line key={`y${i}`} x1={0} y1={tick.y} x2={plotWidth} y2={tick.y} stroke={gridColor} strokeWidth={1} />
-                ))}
-                {/* Vertical dashed gridlines, one per axis slot */}
-                {xTicks.map((tick, i) => (
-                  <Line
-                    key={`x${i}`}
-                    x1={tick.x}
-                    y1={PADDING_TOP}
-                    x2={tick.x}
-                    y2={height - PADDING_BOTTOM}
-                    stroke={gridColor}
-                    strokeWidth={1}
-                    strokeDasharray="2 4"
-                  />
-                ))}
-
-                {/* Target reference line */}
-                <Line x1={0} y1={targetY} x2={plotWidth} y2={targetY} stroke={targetColor} strokeWidth={1.5} strokeDasharray="5 5" />
-
-                {segments.map((seg, i) => (seg.area ? <Path key={`area${i}`} d={seg.area} fill="url(#goalTrendFill)" /> : null))}
-                {segments.map((seg, i) => (
-                  <Path key={`line${i}`} d={seg.path} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                ))}
-                {xy.map((p, i) => (
-                  <Circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? 4.5 : 3} fill={color} />
-                ))}
-              </Svg>
-
-              {/* Target label — pinned near the left so it's visible without
-                  scrolling, rather than at the far end of a wide plot. */}
-              <Text
-                style={{
-                  position: 'absolute',
-                  left: INSET_LEFT,
-                  top: Math.max(targetY - 16, 0),
-                  fontSize: 10,
-                  fontWeight: '700',
-                  color: targetColor,
-                }}>
-                Obiettivo {target}kg
-              </Text>
-
-              {/* X-axis labels — always shown, even for slots with no data yet */}
-              {xTicks.map((tick, i) => (
+        <>
+          <View style={{ flexDirection: 'row', height }}>
+            {/* Fixed y-axis gutter, stays put while the plot scrolls under it */}
+            <View style={{ width: GUTTER_WIDTH, height }}>
+              {yTicks.map((tick, i) => (
                 <Text
                   key={i}
                   style={{
                     position: 'absolute',
-                    left: tick.x - 20,
-                    width: 40,
-                    top: height - PADDING_BOTTOM + 6,
-                    fontSize: 9,
+                    left: 0,
+                    width: GUTTER_WIDTH - 6,
+                    top: tick.y - 7,
+                    fontSize: 10,
                     color: axisColor,
-                    textAlign: 'center',
+                    textAlign: 'right',
                   }}>
                   {tick.label}
                 </Text>
               ))}
+            </View>
 
-              {/* Per-dot kg value, so every logged/aggregated point reads its
-                  own progress rather than needing to eyeball the y-axis. */}
-              {xy.map((p, i) => (
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={32}
+              style={{ width: visibleWidth }}
+              contentContainerStyle={{ width: plotWidth }}>
+              <View style={{ width: plotWidth, height }}>
+                <Svg width={plotWidth} height={height}>
+                  <Defs>
+                    <LinearGradient id="goalTrendFill" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0" stopColor={color} stopOpacity={0.28} />
+                      <Stop offset="1" stopColor={color} stopOpacity={0} />
+                    </LinearGradient>
+                  </Defs>
+
+                  {/* Horizontal gridlines */}
+                  {yTicks.map((tick, i) => (
+                    <Line key={`y${i}`} x1={0} y1={tick.y} x2={plotWidth} y2={tick.y} stroke={gridColor} strokeWidth={1} />
+                  ))}
+                  {/* Vertical dashed gridlines, one per axis slot */}
+                  {xTicks.map((tick, i) => (
+                    <Line
+                      key={`x${i}`}
+                      x1={tick.x}
+                      y1={PADDING_TOP}
+                      x2={tick.x}
+                      y2={height - PADDING_BOTTOM}
+                      stroke={gridColor}
+                      strokeWidth={1}
+                      strokeDasharray="2 4"
+                    />
+                  ))}
+
+                  {/* Target reference line */}
+                  <Line x1={0} y1={targetY} x2={plotWidth} y2={targetY} stroke={targetColor} strokeWidth={1.5} strokeDasharray="5 5" />
+
+                  {segments.map((seg, i) => (seg.area ? <Path key={`area${i}`} d={seg.area} fill="url(#goalTrendFill)" /> : null))}
+                  {segments.map((seg, i) => (
+                    <Path key={`line${i}`} d={seg.path} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  ))}
+                  {xy.map((p, i) => (
+                    <Circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? 4.5 : 3} fill={color} />
+                  ))}
+                </Svg>
+
+                {/* Target label — pinned near the left so it's visible without
+                    scrolling, rather than at the far end of a wide plot. */}
                 <Text
-                  key={i}
                   style={{
                     position: 'absolute',
-                    left: p.x - 20,
-                    width: 40,
-                    top: p.y - 20,
-                    fontSize: 9,
+                    left: INSET_LEFT,
+                    top: Math.max(targetY - 16, 0),
+                    fontSize: 10,
                     fontWeight: '700',
-                    textAlign: 'center',
-                    color,
+                    color: targetColor,
                   }}>
-                  {p.value.toFixed(1)}
+                  Obiettivo {target}kg
                 </Text>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
+
+                {/* X-axis labels — always shown, even for slots with no data yet */}
+                {xTicks.map((tick, i) => (
+                  <Text
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: tick.x - 20,
+                      width: 40,
+                      top: height - PADDING_BOTTOM + 6,
+                      fontSize: 9,
+                      color: axisColor,
+                      textAlign: 'center',
+                    }}>
+                    {tick.label}
+                  </Text>
+                ))}
+
+                {/* Per-dot kg value, so every logged/aggregated point reads its
+                    own progress rather than needing to eyeball the y-axis. */}
+                {xy.map((p, i) => (
+                  <Text
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: p.x - 20,
+                      width: 40,
+                      top: p.y - 20,
+                      fontSize: 9,
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      color,
+                    }}>
+                    {p.value.toFixed(1)}
+                  </Text>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Period caption — tracks whichever slots are currently scrolled
+              into view, so it always reads e.g. "1-30 settembre" for the
+              visible slice rather than the whole (possibly off-screen) range. */}
+          <Text style={{ textAlign: 'center', fontSize: 11, fontWeight: '600', color: axisColor, height: PERIOD_LABEL_HEIGHT }}>{periodLabel}</Text>
+        </>
       ) : null}
     </View>
   );

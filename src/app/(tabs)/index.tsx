@@ -119,7 +119,7 @@ export default function HomeScreen() {
     const now = new Date();
 
     if (weightRange === 'settimana') {
-      return currentWeekDates(now).map((date) => ({ xLabel: weekdayShort(date), value: avgFor(date) }));
+      return currentWeekDates(now).map((date) => ({ xLabel: weekdayShort(date), value: avgFor(date), date }));
     }
 
     if (weightRange === 'mese') {
@@ -128,7 +128,7 @@ export default function HomeScreen() {
       const dayCount = new Date(year, month + 1, 0).getDate();
       return Array.from({ length: dayCount }, (_, i) => {
         const date = `${year}-${(month + 1).toString().padStart(2, '0')}-${(i + 1).toString().padStart(2, '0')}`;
-        return { xLabel: `${i + 1}`, value: avgFor(date) };
+        return { xLabel: `${i + 1}`, value: avgFor(date), date };
       });
     }
 
@@ -145,8 +145,10 @@ export default function HomeScreen() {
     return sums.map((bucket, i) => ({
       xLabel: monthShortLabel(year, i),
       value: bucket.count > 0 ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null,
+      date: `${year}-${(i + 1).toString().padStart(2, '0')}-01`,
     }));
   }, [bodyEntries, weightRange]);
+  const weightDateGranularity = weightRange === 'anno' ? 'month' : 'day';
 
   // One entry per weekday of the CURRENT calendar week — past days read
   // from what was actually logged, today is live, and days still ahead
@@ -274,6 +276,7 @@ export default function HomeScreen() {
           <GoalTrendChart
             points={weightSeries}
             target={currentUser.targetWeightKg}
+            dateGranularity={weightDateGranularity}
             height={240}
             color={theme.accent}
             targetColor={theme.success}
