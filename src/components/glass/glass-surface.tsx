@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Radius } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -27,6 +27,7 @@ export type GlassSurfaceProps = {
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
   bordered?: boolean;
+  onLayout?: (event: LayoutChangeEvent) => void;
 };
 
 // Properties that arrange *children* (as opposed to sizing/positioning the
@@ -48,6 +49,7 @@ export function GlassSurface({
   style,
   children,
   bordered = true,
+  onLayout,
 }: GlassSurfaceProps) {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
@@ -74,6 +76,7 @@ export function GlassSurface({
 
   return (
     <View
+      onLayout={onLayout}
       style={[
         { borderRadius: radius, overflow: 'hidden' },
         Platform.select({

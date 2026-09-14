@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import AppTabs from '@/components/app-tabs';
@@ -12,11 +13,17 @@ import { ChatFab } from '@/components/chat/chat-fab';
 // made every tap on the chat button silently navigate to a tab instead of
 // opening chat). Keeping it external and only visually docked beside the
 // bar (via matching absolute-position math in ChatFab) avoids that.
+//
+// barHeight is measured live off the tab bar's own rendered layout (rather
+// than assumed) and handed to ChatFab so the button always matches the
+// bar's actual height, however its content ends up sizing it.
 export default function TabLayout() {
+  const [barHeight, setBarHeight] = useState<number | null>(null);
+
   return (
     <View style={{ flex: 1 }}>
-      <AppTabs />
-      <ChatFab />
+      <AppTabs onBarHeightChange={setBarHeight} />
+      <ChatFab size={barHeight} />
     </View>
   );
 }

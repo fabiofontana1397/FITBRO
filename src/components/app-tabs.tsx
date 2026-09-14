@@ -19,12 +19,12 @@ const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] =
   { name: 'body', href: '/body', label: 'Corpo', icon: 'body' },
 ];
 
-export default function AppTabs() {
+export default function AppTabs({ onBarHeightChange }: { onBarHeightChange?: (height: number) => void }) {
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
-        <FloatingTabBar>
+        <FloatingTabBar onBarHeightChange={onBarHeightChange}>
           {TAB_ITEMS.map((item) => (
             <TabTrigger key={item.name} name={item.name} href={item.href} asChild>
               <TabButton label={item.label} icon={item.icon} />
@@ -36,7 +36,13 @@ export default function AppTabs() {
   );
 }
 
-function FloatingTabBar({ children }: { children?: React.ReactNode }) {
+function FloatingTabBar({
+  children,
+  onBarHeightChange,
+}: {
+  children?: React.ReactNode;
+  onBarHeightChange?: (height: number) => void;
+}) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -47,7 +53,11 @@ function FloatingTabBar({ children }: { children?: React.ReactNode }) {
         { pointerEvents: 'box-none' },
       ]}>
       <View style={styles.row}>
-        <GlassSurface level="raised" radius={Radius.xlarge} style={styles.bar}>
+        <GlassSurface
+          level="raised"
+          radius={Radius.xlarge}
+          style={styles.bar}
+          onLayout={(e) => onBarHeightChange?.(e.nativeEvent.layout.height)}>
           <View style={styles.barRow}>{children}</View>
         </GlassSurface>
         {/* Reserves the room ChatFab occupies (see _layout.tsx) — the FAB
