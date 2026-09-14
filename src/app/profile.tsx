@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { ScreenScroll } from '@/components/screen-scroll';
@@ -9,6 +9,7 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { seedOneMonthOfTestData } from '@/lib/dev/seed-test-data';
 import { sportIcon, sportMeta } from '@/lib/mock';
 import { useAppStore, type AppearanceMode } from '@/store/app-store';
 import { useAuthStore } from '@/store/auth-store';
@@ -45,6 +46,11 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     logout();
     router.replace('/welcome');
+  };
+
+  const handleSeedTestData = () => {
+    seedOneMonthOfTestData();
+    Alert.alert('Fatto', 'Un mese di dati di test (peso, pasti, allenamenti) è stato generato.');
   };
 
   return (
@@ -120,6 +126,21 @@ export default function ProfileScreen() {
           <ThemedText type="caption" themeColor="textTertiary">
             Presto
           </ThemedText>
+        </GlassSurface>
+      </View>
+
+      <View>
+        <SectionHeader title="Strumenti di sviluppo" />
+        <GlassSurface level="card" radius={Radius.large} style={{ padding: Spacing.three, gap: Spacing.two }}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Genera un mese di peso, pasti e allenamenti registrati (dove esiste già un piano) per provare i grafici
+            con dati realistici. Sovrascrive quanto già presente su questo dispositivo.
+          </ThemedText>
+          <Pressable onPress={handleSeedTestData} hitSlop={8}>
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Genera dati di test
+            </ThemedText>
+          </Pressable>
         </GlassSurface>
       </View>
 
