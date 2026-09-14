@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
-import { GoalTrendChart } from '@/components/ui/goal-trend-chart';
+import { GoalTrendChart, type WeightPoint } from '@/components/ui/goal-trend-chart';
 import { InsightCard } from '@/components/ui/insight-card';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { WeeklyBurnChart } from '@/components/ui/weekly-burn-chart';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { ScreenHeader } from '@/components/screen-header';
@@ -16,9 +17,9 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
-import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
+import { currentWeekDates, daysAgoISO, mondayIndex, weekdayShort } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
-import { computeNutritionTargets, deriveWeeklyTrainingDays, estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
+import { estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
@@ -94,66 +95,61 @@ export default function HomeScreen() {
 
   const latestBody = latestSnapshot(bodyEntries);
   const startBody = bodyEntries[0];
-  const totalToLose = startBody.weightKg - currentUser.targetWeightKg;
   const doneSoFar = startBody.weightKg - latestBody.weightKg;
-  const weightProgress = totalToLose > 0 ? Math.min(doneSoFar / totalToLose, 1) : 1;
   const remainingKg = Math.max(latestBody.weightKg - currentUser.targetWeightKg, 0);
 
-  const weightHistory = useMemo(() => bodyEntries.map((e) => ({ date: e.date, value: e.weightKg })), [bodyEntries]);
+  // Day/week/year switches which aggregation of the logged history feeds
+  // the chart — day is the raw last-7-logged-entries view (what the
+  // reference screenshot itself shows), week/year average into coarser
+  // buckets so a long history doesn't turn into an unreadable wall of
+  // daily dots.
+  const [weightRange, setWeightRange] = useState<'giorno' | 'settimana' | 'anno'>('giorno');
+  const weightSeries = useMemo<WeightPoint[]>(() => {
+    const sorted = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
 
-  // The plan's OWN intended trajectory — one grey milestone per month,
-  // same count as the training/nutrition plan's own duration, fixed to
-  // when the plan started rather than recalculated from "today" — so it
-  // reads as a roadmap real progress can be checked against, not a
-  // forecast that keeps sliding. Recomputes maintenance (TDEE) against
-  // each month's own calorie target (diet plans nudge month 1 easier, then
-  // hold steady — see diet-planner.ts monthCalorieTarget), compounding
-  // forward and holding flat once the target is reached rather than
-  // overshooting past it in later months.
-  const monthlyGuide = useMemo(() => {
-    const targetWeightKg = currentUser.targetWeightKg;
-    const totalMonths = dietPlan?.durationMonths ?? trainingPlan?.durationMonths ?? 0;
-    if (totalMonths === 0) return [];
-
-    const months = dietPlan
-      ? [...dietPlan.months].sort((a, b) => a.monthIndex - b.monthIndex).map((m) => ({ calorieTarget: m.calorieTarget }))
-      : Array.from({ length: totalMonths }, () => ({ calorieTarget: currentUser.dailyCalorieTarget }));
-
-    const planStartDate = (dietPlan?.generatedAt ?? trainingPlan?.generatedAt ?? today).slice(0, 10);
-    const points: { date: string; value: number }[] = [];
-    let weight = startBody.weightKg;
-    let reached = Math.abs(weight - targetWeightKg) < 0.05;
-    let cursorDate = planStartDate;
-
-    for (const month of months) {
-      cursorDate = addDaysISO(cursorDate, 30);
-      if (!reached) {
-        const { tdee } = computeNutritionTargets({
-          sex: currentUser.sex,
-          ageRange: currentUser.ageRange,
-          heightCm: currentUser.heightCm,
-          currentWeightKg: weight,
-          goal: currentUser.goal,
-          jobActivity: onboardingAnswers.jobActivity as string | undefined,
-          weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
-        });
-        const dailyDeficit = tdee - month.calorieTarget;
-        const monthlyChangeKg = -(dailyDeficit * 30) / 7700; // ~7700kcal per kg of fat
-        const movingTowardTarget = monthlyChangeKg < 0 ? targetWeightKg < weight : monthlyChangeKg > 0 ? targetWeightKg > weight : false;
-        if (movingTowardTarget) {
-          weight += monthlyChangeKg;
-          const crossed = monthlyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
-          if (crossed) {
-            weight = targetWeightKg;
-            reached = true;
-          }
-        }
-      }
-      points.push({ date: cursorDate, value: weight });
+    if (weightRange === 'giorno') {
+      return sorted.slice(-7).map((e) => ({ date: e.date, value: e.weightKg, xLabel: weekdayShort(e.date) }));
     }
 
-    return points;
-  }, [currentUser, startBody.weightKg, onboardingAnswers, dietPlan, trainingPlan, today]);
+    if (weightRange === 'settimana') {
+      const byWeek = new Map<string, { sum: number; count: number }>();
+      for (const e of sorted) {
+        const weekStart = new Date(e.date);
+        weekStart.setDate(weekStart.getDate() - mondayIndex(weekStart));
+        const key = weekStart.toISOString().slice(0, 10);
+        const bucket = byWeek.get(key) ?? { sum: 0, count: 0 };
+        bucket.sum += e.weightKg;
+        bucket.count += 1;
+        byWeek.set(key, bucket);
+      }
+      return [...byWeek.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([date, bucket]) => ({
+          date,
+          value: Math.round((bucket.sum / bucket.count) * 10) / 10,
+          xLabel: new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }),
+        }));
+    }
+
+    // anno
+    const byMonth = new Map<string, { sum: number; count: number }>();
+    for (const e of sorted) {
+      const key = e.date.slice(0, 7);
+      const bucket = byMonth.get(key) ?? { sum: 0, count: 0 };
+      bucket.sum += e.weightKg;
+      bucket.count += 1;
+      byMonth.set(key, bucket);
+    }
+    return [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([key, bucket]) => {
+        const date = `${key}-01`;
+        const label = new Date(date).toLocaleDateString('it-IT', { month: 'short' });
+        return { date, value: Math.round((bucket.sum / bucket.count) * 10) / 10, xLabel: label.charAt(0).toUpperCase() + label.slice(1).replace('.', '') };
+      });
+  }, [bodyEntries, weightRange]);
 
   // One entry per weekday of the CURRENT calendar week — past days read
   // from what was actually logged, today is live, and days still ahead
@@ -239,54 +235,47 @@ export default function HomeScreen() {
       <View>
         <SectionHeader title="Obiettivo" action="Vedi corpo" onActionPress={() => router.push('/body')} />
         <GlassSurface level="card" radius={Radius.large} style={styles.goalCard}>
-          <View style={styles.goalHeaderRow}>
-            <View style={{ gap: 2 }}>
-              <ThemedText type="title">{latestBody.weightKg.toFixed(1)} kg</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Target {currentUser.targetWeightKg} kg · {remainingKg.toFixed(1)} kg al target
-              </ThemedText>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-              <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                {Math.round(weightProgress * 100)}%
-              </ThemedText>
-              {doneSoFar !== 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <Icon name={doneSoFar > 0 ? 'trendDown' : 'trendUp'} size={12} color={doneSoFar > 0 ? theme.success : theme.danger} />
-                  <ThemedText type="caption" style={{ color: doneSoFar > 0 ? theme.success : theme.danger, fontWeight: '700' }}>
-                    {doneSoFar > 0 ? '-' : '+'}
-                    {Math.abs(doneSoFar).toFixed(1)}kg finora
-                  </ThemedText>
-                </View>
-              ) : null}
-            </View>
-          </View>
+          <SegmentedControl
+            options={[
+              { value: 'giorno', label: 'Giorno' },
+              { value: 'settimana', label: 'Settimana' },
+              { value: 'anno', label: 'Anno' },
+            ]}
+            value={weightRange}
+            onChange={(v) => setWeightRange(v as typeof weightRange)}
+          />
 
-          {/* A plain filling bar makes the advancement toward the target
-              unmistakable at a glance, on top of (not instead of) the trend
-              line below — the line alone wasn't reading as visible
-              progress. */}
-          <View style={[styles.goalProgressTrack, { backgroundColor: theme.backgroundElement }]}>
-            <View style={[styles.goalProgressFill, { width: `${Math.round(weightProgress * 100)}%`, backgroundColor: theme.accent }]} />
-          </View>
-          <View style={styles.goalProgressLabels}>
-            <ThemedText type="caption" themeColor="textSecondary">
-              {startBody.weightKg.toFixed(1)} kg
-            </ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              {currentUser.targetWeightKg} kg
-            </ThemedText>
+          <View style={styles.goalEmphasisRow}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Mancano al target
+              </ThemedText>
+              <ThemedText type="title" style={{ color: theme.accent }}>
+                {remainingKg.toFixed(1)} kg
+              </ThemedText>
+            </View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Progressi finora
+              </ThemedText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name={doneSoFar > 0 ? 'trendDown' : 'trendUp'} size={16} color={doneSoFar > 0 ? theme.success : theme.danger} />
+                <ThemedText type="title" style={{ color: doneSoFar > 0 ? theme.success : theme.danger }}>
+                  {doneSoFar > 0 ? '-' : '+'}
+                  {Math.abs(doneSoFar).toFixed(1)} kg
+                </ThemedText>
+              </View>
+            </View>
           </View>
 
           <GoalTrendChart
-            history={weightHistory}
-            guide={monthlyGuide}
+            points={weightSeries}
             target={currentUser.targetWeightKg}
-            height={180}
+            height={240}
             color={theme.accent}
-            guideColor={theme.textTertiary}
             targetColor={theme.success}
             axisColor={theme.textTertiary}
+            gridColor={theme.backgroundElement}
           />
         </GlassSurface>
       </View>
@@ -521,24 +510,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     padding: Spacing.four,
   },
-  goalHeaderRow: {
+  goalEmphasisRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  goalProgressTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  goalProgressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  goalProgressLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: -Spacing.two,
   },
   overviewCard: {
     flexDirection: 'row',
