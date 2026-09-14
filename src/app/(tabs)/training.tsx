@@ -79,6 +79,11 @@ export default function TrainingScreen() {
 
   const dayTypeForDate = (date: string) => weeklySplit[mondayIndex(new Date(date))]?.type;
 
+  const selectedDayHeading =
+    selectedDate === daysAgoISO(0)
+      ? 'Allenamento di oggi'
+      : `Allenamento del ${new Date(selectedDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}`;
+
   const isDayComplete = (date: string): boolean => {
     const day = weeklySplit[mondayIndex(new Date(date))];
     if (day?.type !== 'workout') return false;
@@ -146,6 +151,8 @@ export default function TrainingScreen() {
               isDayComplete={isDayComplete}
             />
           </View>
+
+          <ThemedText type="subtitle">{selectedDayHeading}</ThemedText>
 
           {selectedDay?.type === 'workout' ? (
             <View>

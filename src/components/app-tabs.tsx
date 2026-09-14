@@ -41,7 +41,7 @@ const BLUR_BANDS = {
 } as const;
 
 const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] = [
-  { name: 'index', href: '/', label: 'Oggi', icon: 'home' },
+  { name: 'index', href: '/', label: 'Home', icon: 'home' },
   { name: 'training', href: '/training', label: 'Training', icon: 'training' },
   { name: 'nutrition', href: '/nutrition', label: 'Nutrizione', icon: 'nutrition' },
   { name: 'body', href: '/body', label: 'Corpo', icon: 'body' },
