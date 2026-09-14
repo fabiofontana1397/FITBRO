@@ -17,6 +17,7 @@ import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { exportDietPlanPdf } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
 import type { PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
+import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 import { isValidDietPlan, usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
@@ -48,10 +49,20 @@ export default function DietPlanScreen() {
   const selectedDayData = selectedMonthData?.weeklySplit.find((d) => d.weekday === selectedWeekday);
 
   const handleExport = async () => {
-    if (!plan) return;
+    if (!plan || !selectedMonthData) return;
     setExporting(true);
     try {
-      await exportDietPlanPdf(plan, currentUser.name);
+      const goalLabel = labelFor(findQuestion('goal'), plan.goal) ?? plan.goal;
+      await exportDietPlanPdf({
+        userName: currentUser.name,
+        goalNote: `Obiettivo: ${goalLabel}`,
+        totalMonths: plan.durationMonths,
+        monthTitle: selectedMonthData.title,
+        monthFocus: selectedMonthData.focusNote,
+        calorieTarget: selectedMonthData.calorieTarget,
+        macroTargetsG: selectedMonthData.macroTargetsG,
+        weeklySplit: selectedMonthData.weeklySplit,
+      });
     } catch {
       Alert.alert('Non riesco a generare il PDF', 'Riprova tra qualche istante.');
     } finally {
@@ -158,7 +169,7 @@ export default function DietPlanScreen() {
                 <Target label="Grassi" value={`${selectedMonthData.macroTargetsG.fats}`} unit="g" />
               </View>
 
-              <SegmentedControl options={WEEKDAY_OPTIONS} value={selectedWeekday} onChange={setSelectedWeekday} scrollable />
+              <SegmentedControl options={WEEKDAY_OPTIONS} value={selectedWeekday} onChange={setSelectedWeekday} />
 
               {selectedDayData ? (
                 <View style={{ gap: Spacing.two }}>

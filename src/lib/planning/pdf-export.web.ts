@@ -7,9 +7,7 @@
 import jsPDF from 'jspdf/dist/jspdf.es.min.js';
 import autoTable from 'jspdf-autotable';
 
-import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
-
-import type { DietPlan, PlanMealItem } from './types';
+import type { DietDayPlan, PlanMealItem } from './types';
 
 // Web build of pdf-export — resolved automatically instead of pdf-export.ts
 // by Metro/TS on web. expo-print's web shim ignores the `html` it's given
@@ -67,7 +65,21 @@ function drawFooter(doc: jsPDF, pageWidth: number, pageHeight: number) {
   doc.text(String(doc.getNumberOfPages()), pageWidth - MARGIN, pageHeight - 24, { align: 'right' });
 }
 
-export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
+export type DietPlanPdfInput = {
+  userName: string;
+  goalNote: string;
+  totalMonths: number;
+  monthTitle: string;
+  monthFocus: string;
+  calorieTarget: number;
+  macroTargetsG: { protein: number; carbs: number; fats: number };
+  weeklySplit: DietDayPlan[];
+};
+
+/** Exports only the currently selected month's plan — one page, one table,
+ * each day's name appearing once as its own heading row (spanning the full
+ * table width) above that day's meals rather than repeated on every row. */
+export async function exportDietPlanPdf(input: DietPlanPdfInput) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = drawLetterhead(doc, pageWidth);
@@ -75,59 +87,54 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(...INK);
-  doc.text(`Piano alimentare di ${userName}`, MARGIN, y);
+  doc.text(`Piano alimentare di ${input.userName}`, MARGIN, y);
   y += 18;
 
-  const goalLabel = labelFor(findQuestion('goal'), plan.goal) ?? plan.goal;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text(`Durata piano totale: ${plan.durationMonths} mesi · Obiettivo: ${goalLabel}`, MARGIN, y);
-  y += 24;
+  doc.text(`Durata piano totale: ${input.totalMonths} mesi`, MARGIN, y);
+  y += 14;
+  doc.setTextColor(...BODY);
+  doc.text(input.goalNote, MARGIN, y);
+  y += 22;
 
-  plan.months.forEach((month, index) => {
-    if (index > 0) {
-      doc.addPage();
-      y = drawLetterhead(doc, pageWidth);
-    }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(...INK);
+  doc.text(input.monthTitle, MARGIN, y);
+  y += 16;
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...INK);
-    doc.text(month.title, MARGIN, y);
-    y += 16;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...BODY);
+  const focusLines = doc.splitTextToSize(input.monthFocus, pageWidth - MARGIN * 2);
+  doc.text(focusLines, MARGIN, y);
+  y += focusLines.length * 12 + 6;
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...BODY);
-    const focusLines = doc.splitTextToSize(month.focusNote, pageWidth - MARGIN * 2);
-    doc.text(focusLines, MARGIN, y);
-    y += focusLines.length * 12 + 6;
+  doc.text(
+    `${input.calorieTarget} kcal/giorno · Proteine ${input.macroTargetsG.protein}g · Carboidrati ${input.macroTargetsG.carbs}g · Grassi ${input.macroTargetsG.fats}g`,
+    MARGIN,
+    y
+  );
+  y += 16;
 
-    doc.text(
-      `${month.calorieTarget} kcal/giorno · Proteine ${month.macroTargetsG.protein}g · Carboidrati ${month.macroTargetsG.carbs}g · Grassi ${month.macroTargetsG.fats}g`,
-      MARGIN,
-      y
-    );
-    y += 16;
-
-    autoTable(doc, {
-      startY: y,
-      margin: { left: MARGIN, right: MARGIN },
-      head: [['Giorno', 'Pasto', 'Alimenti', 'Totale']],
-      body: month.weeklySplit.flatMap((day) =>
-        day.meals.map((meal) => [
-          day.weekday,
-          `${meal.time}\n${meal.label}`,
-          meal.items.map((i) => formatItem(i)).join('\n'),
-          `${meal.totalKcal} kcal`,
-        ])
-      ),
-      styles: { fontSize: 9, cellPadding: 6, textColor: BODY, valign: 'top' },
-      headStyles: { fillColor: ORANGE, textColor: 255 },
-      alternateRowStyles: { fillColor: [247, 247, 248] },
-      columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 70 }, 3: { cellWidth: 55 } },
-    });
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Pasto', 'Alimenti', 'Totale']],
+    body: input.weeklySplit.flatMap((day) => [
+      [{ content: day.weekday, colSpan: 3, styles: { fontStyle: 'bold', fillColor: [255, 248, 245], textColor: INK } }],
+      ...day.meals.map((meal) => [
+        `${meal.time}\n${meal.label}`,
+        meal.items.map((i) => formatItem(i)).join('\n'),
+        `${meal.totalKcal} kcal`,
+      ]),
+    ]),
+    styles: { fontSize: 9, cellPadding: 6, textColor: BODY, valign: 'top' },
+    headStyles: { fillColor: ORANGE, textColor: 255 },
+    alternateRowStyles: { fillColor: [247, 247, 248] },
+    columnStyles: { 0: { cellWidth: 70 }, 2: { cellWidth: 55 } },
   });
 
   const pageCount = doc.getNumberOfPages();
@@ -136,7 +143,7 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
     drawFooter(doc, pageWidth, doc.internal.pageSize.getHeight());
   }
 
-  doc.save(`piano-alimentare-${userName}.pdf`);
+  doc.save(`piano-alimentare-${input.userName}.pdf`);
 }
 
 export type TrainingPlanPdfRow = {
