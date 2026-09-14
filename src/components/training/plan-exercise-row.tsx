@@ -235,6 +235,11 @@ const styles = StyleSheet.create({
   rightCol: {
     width: 132,
     alignItems: 'center',
+    // The left column (target/load/recupero/tempo) is usually taller than
+    // this one's chart+hint, which otherwise left them stranded near the
+    // top with empty space below — anchor to the bottom so they sit level
+    // with the "Nuovo carico" button right underneath instead.
+    justifyContent: 'flex-end',
     gap: 6,
   },
   chartHint: {
