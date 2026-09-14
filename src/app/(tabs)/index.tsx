@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
+import { GoalTrendChart } from '@/components/ui/goal-trend-chart';
 import { InsightCard } from '@/components/ui/insight-card';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -13,7 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
-import { latestSnapshot } from '@/lib/mock/body';
+import { latestSnapshot, seriesOf } from '@/lib/mock/body';
 import { daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
@@ -125,20 +126,24 @@ export default function HomeScreen() {
       <View>
         <SectionHeader title="Obiettivo peso" action="Vedi corpo" onActionPress={() => router.push('/body')} />
         <GlassSurface level="card" radius={Radius.large} style={styles.goalCard}>
-          <ProgressRing size={104} strokeWidth={10} progress={weightProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-            <ThemedText type="title">{remainingKg.toFixed(1)}</ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              kg al target
-            </ThemedText>
-          </ProgressRing>
-          <View style={{ flex: 1, gap: 4 }}>
-            <ThemedText type="caption" themeColor="textSecondary">
-              Da {startBody.weightKg.toFixed(1)} kg a {latestBody.weightKg.toFixed(1)} kg, target {currentUser.targetWeightKg} kg.
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.accent, fontWeight: '700' }}>
-              {Math.round(weightProgress * 100)}% del percorso completato
+          <View style={styles.goalHeaderRow}>
+            <View style={{ gap: 2 }}>
+              <ThemedText type="title">{latestBody.weightKg.toFixed(1)} kg</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Target {currentUser.targetWeightKg} kg · {remainingKg.toFixed(1)} kg al target
+              </ThemedText>
+            </View>
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              {Math.round(weightProgress * 100)}%
             </ThemedText>
           </View>
+          <GoalTrendChart
+            data={seriesOf(bodyEntries, 'weightKg')}
+            target={currentUser.targetWeightKg}
+            height={100}
+            color={theme.accent}
+            targetColor={theme.textTertiary}
+          />
         </GlassSurface>
       </View>
 
@@ -316,10 +321,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   goalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.four,
+    gap: Spacing.three,
     padding: Spacing.four,
+  },
+  goalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   overviewCard: {
     flexDirection: 'row',
