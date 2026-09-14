@@ -34,17 +34,20 @@ const PETALS: Petal[] = [
 // Gradient stops shared by every petal's radial fill — bright center
 // easing through the mid tone and fading all the way to transparent at
 // the rim, so petals blend into the sphere and into each other with no
-// hard edge (the stacked-rings approximation used before still showed
-// visible concentric bands). A real SVG radialGradient does this
-// natively — still just plain pixels being painted, so (like the ring
-// version it replaces, and unlike the BlurView before that) there's no
-// separate compositing pass that can go stale on-device.
+// hard edge. The falloff is spread across the WHOLE radius (not mostly
+// solid until the last stretch) so each petal reads as a soft glow bleeding
+// into its neighbors rather than a clean-edged disc that merely happens to
+// drift — several of these heavily overlap at all times (see blobSize
+// below), which is what actually sells "liquid mixing" instead of "balls
+// moving around". A real SVG radialGradient does the falloff itself
+// natively — still just plain pixels being painted, so there's no separate
+// compositing pass that can go stale on-device the way BlurView's did.
 // colorIndex picks which of the petal's 3 colors [edge, mid, center] each
 // stop uses; opacity fades to 0 by the last stop.
 const GRADIENT_STOPS = [
   { offset: '0%', colorIndex: 2, opacity: 1 },
-  { offset: '45%', colorIndex: 1, opacity: 0.85 },
-  { offset: '75%', colorIndex: 0, opacity: 0.45 },
+  { offset: '30%', colorIndex: 1, opacity: 0.75 },
+  { offset: '60%', colorIndex: 0, opacity: 0.35 },
   { offset: '100%', colorIndex: 0, opacity: 0 },
 ];
 
@@ -157,7 +160,11 @@ function PetalLayer({ petal, size, index }: { petal: Petal; size: number; index:
     };
   });
 
-  const blobSize = size * 0.6;
+  // Big enough that several petals overlap almost everywhere in the
+  // sphere at all times — that constant overlap, not any single petal's
+  // own shape, is what reads as color continuously blending rather than
+  // distinct spheres sliding past each other.
+  const blobSize = size * 0.88;
   const gradientId = `chatOrbPetal${index}`;
 
   return (

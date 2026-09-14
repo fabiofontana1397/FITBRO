@@ -24,6 +24,16 @@ const DEFAULT_BAR_HEIGHT = 48;
 // area every screen already keeps clear for the floating bar.
 const FADE_HEIGHT = BottomTabInset + Spacing.six;
 
+// A single BlurView turns on at full strength the instant content crosses
+// its top edge — a visible seam, since there's nothing to ramp through.
+// Stacking several bands, each starting lower and a little stronger, and
+// each covering only the zone below its own start, approximates a blur
+// that gradually deepens instead of cutting on: near the top only the
+// first (weakest) band applies, and by the bottom all of them are
+// compositing on top of each other. web/native use different absolute
+// scales for `intensity`, so each is its own progression.
+const BLUR_BANDS = { web: [4, 8, 13, 18], default: [7, 13, 19, 25] } as const;
+
 const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] = [
   { name: 'index', href: '/', label: 'Oggi', icon: 'home' },
   { name: 'training', href: '/training', label: 'Training', icon: 'training' },
@@ -58,14 +68,18 @@ export default function AppTabs({ onBarHeightChange }: { onBarHeightChange?: (he
 function ScrollFadeMask() {
   const theme = useTheme();
   const isDark = useColorScheme() === 'dark';
+  const bands = Platform.OS === 'web' ? BLUR_BANDS.web : BLUR_BANDS.default;
   return (
     <View pointerEvents="none" style={[styles.fadeMask, { height: FADE_HEIGHT }]}>
-      <BlurView
-        intensity={Platform.OS === 'web' ? 18 : 28}
-        tint={isDark ? 'dark' : 'light'}
-        blurMethod="dimezisBlurViewSdk31Plus"
-        style={StyleSheet.absoluteFill}
-      />
+      {bands.map((intensity, i) => (
+        <BlurView
+          key={i}
+          intensity={intensity}
+          tint={isDark ? 'dark' : 'light'}
+          blurMethod="dimezisBlurViewSdk31Plus"
+          style={{ position: 'absolute', top: (FADE_HEIGHT / bands.length) * i, left: 0, right: 0, bottom: 0 }}
+        />
+      ))}
       <LinearGradient colors={['transparent', theme.background]} locations={[0, 0.6]} style={StyleSheet.absoluteFill} />
     </View>
   );
