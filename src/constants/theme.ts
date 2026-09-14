@@ -10,13 +10,17 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// A more saturated, almost-fluorescent orange than the original — same
+// ramp shape (a light tint through to a dark pressed-state shade), just
+// pushed toward pure vivid orange (#FF6A00) instead of the more muted,
+// slightly red-leaning #FF5A1F.
 const orange = {
-  50: '#FFF1EA',
-  100: '#FFDCC6',
-  300: '#FF9D66',
-  500: '#FF5A1F',
-  600: '#E84B12',
-  700: '#C23D0D',
+  50: '#FFF0E0',
+  100: '#FFD9B0',
+  300: '#FFA24D',
+  500: '#FF6A00',
+  600: '#E85F00',
+  700: '#C24F00',
 };
 
 const neutral = {
@@ -74,7 +78,7 @@ export const Colors = {
     textTertiary: neutral[500],
     accent: orange[500],
     accentPressed: orange[300],
-    accentSoft: 'rgba(255,90,31,0.16)',
+    accentSoft: 'rgba(255,106,0,0.16)',
     onAccent: neutral[0],
     success: '#3DD07A',
     warning: '#E0B23D',

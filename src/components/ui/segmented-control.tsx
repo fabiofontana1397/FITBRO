@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     bottom: Spacing.half,
     borderRadius: Radius.pill,
     ...Platform.select({
-      web: { boxShadow: '0px 3px 8px rgba(255,90,31,0.35)' },
+      web: { boxShadow: '0px 3px 8px rgba(255,106,0,0.35)' },
       default: { shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
     }),
   },
