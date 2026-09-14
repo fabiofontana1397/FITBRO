@@ -58,3 +58,15 @@ export function isValidTrainingPlan(plan: TrainingPlan | null): boolean {
     )
   );
 }
+
+/**
+ * Same idea as isValidTrainingPlan, for the diet plan: months generated
+ * before it moved from one repeated "sample day" to a real day-by-day
+ * weeklySplit only have the old `sampleDay` field, and would throw
+ * ("weeklySplit is undefined") the moment a screen renders them. Callers
+ * should treat an invalid plan the same as a missing one and regenerate it.
+ */
+export function isValidDietPlan(plan: DietPlan | null): boolean {
+  if (!plan) return false;
+  return plan.months.every((month) => Array.isArray(month.weeklySplit) && month.weeklySplit.length > 0);
+}

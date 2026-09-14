@@ -15,7 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { exportDietPlanPdf } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
 import type { DietDayPlan, PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
-import { usePlanStore } from '@/store/plan-store';
+import { isValidDietPlan, usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
 const PHASE_LABEL: Record<PlanPhaseKind, string> = {
@@ -26,7 +26,11 @@ const PHASE_LABEL: Record<PlanPhaseKind, string> = {
 
 export default function DietPlanScreen() {
   const theme = useTheme();
-  const plan = usePlanStore((s) => s.dietPlan);
+  const rawPlan = usePlanStore((s) => s.dietPlan);
+  // A plan persisted before the day-by-day weeklySplit existed only has the
+  // old sampleDay field — treat it the same as no plan rather than crash
+  // when the content below reads weeklySplit off it.
+  const plan = isValidDietPlan(rawPlan) ? rawPlan : null;
   const currentUser = useUserStore();
   const [exporting, setExporting] = useState(false);
 

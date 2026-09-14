@@ -35,7 +35,7 @@ import {
   type MealSlot,
 } from '@/store/nutrition-store';
 import { useOnboardingStore } from '@/store/onboarding-store';
-import { usePlanStore } from '@/store/plan-store';
+import { isValidDietPlan, usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
 
 export default function NutritionScreen() {
@@ -60,12 +60,12 @@ export default function NutritionScreen() {
     // permanently caching) a plan from empty/default data — the dietPlan
     // dependency below would then never change to retrigger it.
     if (!planStoreHydrated || !onboardingHydrated || !userStoreHydrated) return;
-    if (dietPlan || onboardingAnswers.mode === 'training') return;
+    if (isValidDietPlan(dietPlan) || onboardingAnswers.mode === 'training') return;
     generatePlans(onboardingAnswers, {
       dailyCalorieTarget: currentUser.dailyCalorieTarget,
       macroTargetsG: currentUser.macroTargetsG,
     });
-    // Only needs to run once per missing-plan case, not on every keystroke of onboardingAnswers/currentUser.
+    // Only needs to run once per missing/invalid-plan case, not on every keystroke of onboardingAnswers/currentUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dietPlan, planStoreHydrated, onboardingHydrated, userStoreHydrated]);
 
