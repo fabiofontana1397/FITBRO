@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
@@ -9,9 +9,11 @@ import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { MonthProgressBar } from '@/components/ui/month-progress-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getExerciseMedia } from '@/lib/exercise-media/exercise-media';
+import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { exportTrainingPlanPdf, type TrainingPlanPdfRow } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
@@ -21,7 +23,8 @@ import { latestWeightForExercise, useTrainingProgressStore } from '@/store/train
 import { useUserStore } from '@/store/user-store';
 
 type DayItem = { key: string; exerciseId?: string; name: string; subtitle: string };
-type DayGroup = { weekday: string; title: string; icon: 'gym' | 'running'; items: DayItem[] };
+
+const WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((weekday) => ({ value: weekday, label: weekday }));
 
 export default function TrainingPlanScreen() {
   const theme = useTheme();
@@ -37,30 +40,8 @@ export default function TrainingPlanScreen() {
   const isUnlocked = selectedMonth <= currentMonthIdx;
   const progress = plan ? monthProgress(plan, selectedMonth) : null;
 
-  const dayGroups: DayGroup[] = useMemo(() => {
-    if (!selectedMonthData) return [];
-    return selectedMonthData.weeklySplit
-      .filter((day) => day.type !== 'rest')
-      .map((day): DayGroup => {
-        if (day.type === 'workout') {
-          return {
-            weekday: day.weekday,
-            title: day.title,
-            icon: 'gym',
-            items: (day.exercises ?? []).map((ex) => {
-              const rest = ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`;
-              return { key: ex.id, exerciseId: ex.id, name: ex.name, subtitle: `${ex.sets}×${ex.reps} · recupero ${rest}` };
-            }),
-          };
-        }
-        return {
-          weekday: day.weekday,
-          title: day.title,
-          icon: 'running',
-          items: [{ key: day.weekday, name: day.title, subtitle: day.note ?? '' }],
-        };
-      });
-  }, [selectedMonthData]);
+  const [selectedWeekday, setSelectedWeekday] = useState(WEEKDAY_LABELS[0]);
+  const selectedDay = selectedMonthData?.weeklySplit.find((d) => d.weekday === selectedWeekday);
 
   const goalLabel = labelFor(findQuestion('goal'), answers.goal) ?? '';
 
@@ -203,23 +184,38 @@ export default function TrainingPlanScreen() {
                 </ThemedText>
               </Pressable>
 
-              <View style={{ gap: Spacing.four }}>
-                {dayGroups.map((group) => (
-                  <View key={group.weekday} style={{ gap: Spacing.two }}>
-                    <View style={styles.dayHeadingRow}>
-                      <Icon name={group.icon} size={14} color={theme.textSecondary} />
-                      <ThemedText type="label" themeColor="textSecondary">
-                        {group.weekday} · {group.title}
-                      </ThemedText>
-                    </View>
-                    <View style={{ gap: Spacing.two }}>
-                      {group.items.map((item) => (
-                        <ExerciseSummaryCard key={item.key} item={item} />
-                      ))}
-                    </View>
+              <SegmentedControl options={WEEKDAY_OPTIONS} value={selectedWeekday} onChange={setSelectedWeekday} />
+
+              {selectedDay?.type === 'workout' ? (
+                <View style={{ gap: Spacing.two }}>
+                  {(selectedDay.exercises ?? []).map((ex) => {
+                    const rest = ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`;
+                    return (
+                      <ExerciseSummaryCard
+                        key={ex.id}
+                        item={{
+                          key: ex.id,
+                          exerciseId: ex.id,
+                          name: ex.name,
+                          subtitle: `${ex.sets}×${ex.reps} · recupero ${rest}`,
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              ) : selectedDay?.type === 'cardio' ? (
+                <ExerciseSummaryCard item={{ key: selectedDay.weekday, name: selectedDay.title, subtitle: selectedDay.note ?? '' }} />
+              ) : selectedDay?.type === 'rest' ? (
+                <GlassSurface level="card" radius={Radius.large} style={styles.lockedCard}>
+                  <View style={[styles.lockedIcon, { backgroundColor: theme.backgroundElement }]}>
+                    <Icon name="moon" size={22} color={theme.textSecondary} />
                   </View>
-                ))}
-              </View>
+                  <ThemedText type="smallBold">Giorno di riposo</ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                    Il recupero fa parte del piano: dormi bene e resta idratato.
+                  </ThemedText>
+                </GlassSurface>
+              ) : null}
             </>
           )}
         </>
@@ -287,11 +283,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    gap: 6,
-  },
-  dayHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
   },
   exerciseCard: {
