@@ -81,6 +81,7 @@ export type TrainingPlanPdfRow = {
   sets: number | null;
   reps: string | null;
   rest: string | null;
+  tempo: string | null;
   carico: string | null;
 };
 
@@ -93,6 +94,17 @@ export type TrainingPlanPdfInput = {
   monthFocus: string;
   rows: TrainingPlanPdfRow[];
 };
+
+const TEMPO_PHASE_LABELS = ['negativa', 'isometria', 'spinta'];
+
+/** "3-0-1" -> "3-0-1 (3s negativa, 0s isometria, 1s spinta)" for the PDF's
+ * description column — same cadence notation shown in the app's exercise cards. */
+function describeTempo(tempo: string): string {
+  const parts = tempo.split('-');
+  if (parts.length !== 3) return tempo;
+  const detail = parts.map((seconds, i) => `${seconds}s ${TEMPO_PHASE_LABELS[i]}`).join(', ');
+  return `${tempo} (${detail})`;
+}
 
 const TRAINING_STYLE = `
   * { box-sizing: border-box; }
@@ -115,7 +127,7 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
     .map((row) => {
       const dayHeading =
         row.weekday !== lastDay
-          ? `<tr><td class="day" colspan="5">${escapeHtml(row.weekday)} · ${escapeHtml(row.dayTitle)}</td></tr>`
+          ? `<tr><td class="day" colspan="6">${escapeHtml(row.weekday)} · ${escapeHtml(row.dayTitle)}</td></tr>`
           : '';
       lastDay = row.weekday;
       return `${dayHeading}
@@ -124,6 +136,7 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
           <td>${row.sets ?? '—'}</td>
           <td>${row.reps ? escapeHtml(row.reps) : '—'}</td>
           <td>${row.rest ? escapeHtml(row.rest) : '—'}</td>
+          <td>${row.tempo ? escapeHtml(describeTempo(row.tempo)) : '—'}</td>
           <td>${row.carico ? escapeHtml(row.carico) : '—'}</td>
         </tr>`;
     })
@@ -136,16 +149,16 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
 <style>${TRAINING_STYLE}</style>
 </head>
 <body>
-  <h1>FITBRO — Piano di allenamento</h1>
-  <div class="meta">${escapeHtml(input.userName)} · Piano di ${input.totalMonths} mesi · Scheda: Mese ${input.monthIndex} di ${input.totalMonths}</div>
+  <h1>Piano di allenamento di ${escapeHtml(input.userName)}</h1>
+  <div class="meta">Durata piano totale: ${input.totalMonths} mesi</div>
   <div class="goal">${escapeHtml(input.goalNote)}</div>
   <h2>${escapeHtml(input.monthTitle)}</h2>
   <p class="phase-note">${escapeHtml(input.monthFocus)}</p>
   <table>
-    <thead><tr><th>Esercizio</th><th>Serie</th><th>Ripetizioni</th><th>Recupero</th><th>Carico</th></tr></thead>
+    <thead><tr><th>Esercizio</th><th>Serie</th><th>Ripetizioni</th><th>Recupero</th><th>Descrizione</th><th>Carico</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <div class="footer">~ = carico consigliato per iniziare, sostituito dal carico reale una volta registrato in app.</div>
+  <div class="footer">Generato da FITBRO. Il piano si aggiorna nel tempo in base ai tuoi progressi reali.</div>
 </body>
 </html>`;
 

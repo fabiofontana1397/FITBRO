@@ -70,7 +70,8 @@ export default function TrainingPlanScreen() {
         if (day.type === 'workout') {
           return (day.exercises ?? []).map((ex) => {
             const logged = latestWeightForExercise(progressSets, ex.id);
-            const carico = logged != null ? `${logged} kg` : ex.suggestedKg != null ? `~${ex.suggestedKg} kg` : null;
+            const carico =
+              logged != null ? `Ultimo carico: ${logged}kg` : ex.suggestedKg != null ? `Consigliato: ${ex.suggestedKg}kg` : '—';
             return {
               weekday: day.weekday,
               dayTitle: day.title,
@@ -78,12 +79,24 @@ export default function TrainingPlanScreen() {
               sets: ex.sets,
               reps: ex.reps,
               rest: ex.restSec < 60 ? `${ex.restSec}s` : `${Math.round(ex.restSec / 60)} min`,
+              tempo: ex.tempo,
               carico,
             };
           });
         }
         if (day.type === 'cardio') {
-          return [{ weekday: day.weekday, dayTitle: day.title, name: day.note ?? 'Corsa', sets: null, reps: null, rest: null, carico: null }];
+          return [
+            {
+              weekday: day.weekday,
+              dayTitle: day.title,
+              name: day.note ?? 'Corsa',
+              sets: null,
+              reps: null,
+              rest: null,
+              tempo: null,
+              carico: null,
+            },
+          ];
         }
         return [];
       });
