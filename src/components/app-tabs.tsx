@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps } from 'expo-router/ui';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,10 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { SpringSnappy } from '@/constants/motion';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+// Matches ChatFab's own DEFAULT_SIZE fallback, used before the bar's real
+// height has been measured for the very first frame.
+const DEFAULT_BAR_HEIGHT = 48;
 
 const TAB_ITEMS: { name: string; href: Href; label: string; icon: IconName }[] = [
   { name: 'index', href: '/', label: 'Oggi', icon: 'home' },
@@ -44,6 +48,7 @@ function FloatingTabBar({
   onBarHeightChange?: (height: number) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [barHeight, setBarHeight] = useState<number | null>(null);
 
   return (
     <View
@@ -57,14 +62,20 @@ function FloatingTabBar({
           level="raised"
           radius={Radius.xlarge}
           style={styles.bar}
-          onLayout={(e) => onBarHeightChange?.(e.nativeEvent.layout.height)}>
+          onLayout={(e) => {
+            const height = e.nativeEvent.layout.height;
+            setBarHeight(height);
+            onBarHeightChange?.(height);
+          }}>
           <View style={styles.barRow}>{children}</View>
         </GlassSurface>
         {/* Reserves the room ChatFab occupies (see _layout.tsx) — the FAB
             itself is a fully independent overlay painted on top of this gap,
             not a sibling here, so tapping it can't be misrouted by TabList's
-            own tap-resolution (see chat-fab.tsx for why that matters). */}
-        <View style={styles.fabSpacer} />
+            own tap-resolution (see chat-fab.tsx for why that matters). Sized
+            to the FAB's own footprint (it matches this same bar height) plus
+            a visible gap, so the two never crowd or overlap each other. */}
+        <View style={{ width: (barHeight ?? DEFAULT_BAR_HEIGHT) + Spacing.two }} />
       </View>
     </View>
   );
@@ -116,9 +127,6 @@ const styles = StyleSheet.create({
   },
   bar: {
     flex: 1,
-  },
-  fabSpacer: {
-    width: 56,
   },
   barRow: {
     flexDirection: 'row',

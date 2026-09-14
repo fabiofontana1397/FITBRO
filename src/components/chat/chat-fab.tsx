@@ -2,10 +2,9 @@ import { router } from 'expo-router';
 import { Platform, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatOrb } from '@/components/chat/chat-orb';
 import { GlassSurface } from '@/components/glass/glass-surface';
-import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 
 const DEFAULT_SIZE = 48;
 
@@ -20,13 +19,16 @@ const DEFAULT_SIZE = 48;
  * `size` is the tab bar's own measured height (see _layout.tsx), so the
  * button always stands exactly as tall as the bar beside it — width tracks
  * height 1:1 (rather than a fixed 48) so it stays a perfect circle instead
- * of stretching into an oval whenever the bar's height changes. */
+ * of stretching into an oval whenever the bar's height changes.
+ *
+ * Its face is a small animated ChatOrb rather than a static chat-bubble
+ * icon — a living "AI entity" cue that's always drifting, never a still
+ * image, so the coach reads as present rather than a dormant button. */
 export function ChatFab({ size }: { size?: number | null }) {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const bottomOffset = Platform.select({ web: Spacing.four, default: insets.bottom || Spacing.three });
   const buttonSize = size ?? DEFAULT_SIZE;
-  const iconSize = Math.round(buttonSize * 0.46);
+  const orbSize = Math.round(buttonSize * 0.66);
 
   return (
     <Pressable
@@ -38,7 +40,7 @@ export function ChatFab({ size }: { size?: number | null }) {
         radius={Radius.pill}
         style={[styles.button, { width: buttonSize, height: buttonSize }]}
         bordered={false}>
-        <Icon name="chatBubble" size={iconSize} color={theme.accent} />
+        <ChatOrb size={orbSize} />
       </GlassSurface>
     </Pressable>
   );
