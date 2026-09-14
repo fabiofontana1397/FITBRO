@@ -12,7 +12,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { exportDietPlanPdf } from '@/lib/planning/pdf-export';
 import { currentMonthIndex, monthProgress } from '@/lib/planning/plan-progress';
-import type { PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
+import type { DietDayPlan, PlanMeal, PlanPhaseKind } from '@/lib/planning/types';
 import { useOnboardingStore } from '@/store/onboarding-store';
 import { usePlanStore } from '@/store/plan-store';
 import { useUserStore } from '@/store/user-store';
@@ -160,15 +160,10 @@ export default function DietPlanScreen() {
                 <Target label="Grassi" value={`${selectedMonthData.macroTargetsG.fats}`} unit="g" />
               </View>
 
-              <View style={{ gap: Spacing.two }}>
-                <ThemedText type="label" themeColor="textSecondary">
-                  Esempio di giornata
-                </ThemedText>
-                <View style={{ gap: Spacing.two }}>
-                  {selectedMonthData.sampleDay.map((meal) => (
-                    <MealCard key={meal.slotId} meal={meal} />
-                  ))}
-                </View>
+              <View style={{ gap: Spacing.four }}>
+                {selectedMonthData.weeklySplit.map((day) => (
+                  <DayGroup key={day.weekday} day={day} />
+                ))}
               </View>
             </>
           ) : null}
@@ -178,18 +173,58 @@ export default function DietPlanScreen() {
   );
 }
 
+function DayGroup({ day }: { day: DietDayPlan }) {
+  const theme = useTheme();
+  return (
+    <View style={{ gap: Spacing.two }}>
+      <View style={styles.dayHeadingRow}>
+        <Icon name="nutrition" size={14} color={theme.textSecondary} />
+        <ThemedText type="label" themeColor="textSecondary">
+          {day.weekday}
+        </ThemedText>
+      </View>
+      <View style={{ gap: Spacing.two }}>
+        {day.meals.map((meal) => (
+          <MealCard key={meal.slotId} meal={meal} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function MealCard({ meal }: { meal: PlanMeal }) {
+  const theme = useTheme();
   return (
     <GlassSurface level="card" radius={Radius.large} style={styles.mealCard}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <ThemedText type="caption" themeColor="textSecondary">
-          {meal.time} · {meal.label}
+      <View style={styles.mealHeader}>
+        <ThemedText type="smallBold" style={{ flex: 1 }}>
+          {meal.label}
         </ThemedText>
-        <ThemedText type="small">{meal.items.map((i) => `${i.name} (${i.grams}g)`).join(', ')}</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {meal.time}
+        </ThemedText>
       </View>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {meal.totalKcal} kcal
-      </ThemedText>
+
+      <View style={{ gap: 6 }}>
+        {meal.items.map((item, index) => (
+          <View key={index} style={{ gap: 1 }}>
+            <ThemedText type="small">
+              {item.name} <ThemedText type="caption" themeColor="textSecondary">· {item.grams}g</ThemedText>
+            </ThemedText>
+            {item.substitutes?.length ? (
+              <ThemedText type="caption" themeColor="textTertiary">
+                In alternativa: {item.substitutes.map((s) => `${s.name} (${s.grams}g)`).join(', ')}
+              </ThemedText>
+            ) : null}
+          </View>
+        ))}
+      </View>
+
+      <View style={[styles.mealFooterDivider, { borderTopColor: theme.border }]}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          Totale {meal.totalKcal} kcal
+        </ThemedText>
+      </View>
     </GlassSurface>
   );
 }
@@ -265,10 +300,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
+  dayHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   mealCard: {
+    gap: Spacing.two,
+    padding: Spacing.three,
+  },
+  mealHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.three,
+  },
+  mealFooterDivider: {
+    paddingTop: Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

@@ -2,9 +2,10 @@ import { findFood } from '@/lib/mock/food-database';
 import type { Goal } from '@/lib/mock/types';
 import { MEAL_SLOTS } from '@/store/nutrition-store';
 
+import { WEEKDAY_LABELS } from './exercise-library';
 import { buildFoodPools, pick } from './food-pools';
 import { computePlanDurationMonths } from './plan-duration';
-import type { DietMonthPlan, DietPlan, PlanMeal, PlanMealItem, PlanPhaseKind } from './types';
+import type { DietDayPlan, DietMonthPlan, DietPlan, PlanMeal, PlanMealItem, PlanPhaseKind } from './types';
 
 export type DietPlanInput = {
   answers: Record<string, unknown>;
@@ -65,36 +66,72 @@ function round5(n: number): number {
   return Math.max(5, Math.round(n / 5) * 5);
 }
 
-function buildSampleDay(seed: number, calorieTarget: number, pools: ReturnType<typeof buildFoodPools>): PlanMeal[] {
+/** Up to 2 same-role swaps for an item (e.g. another protein source at an
+ * equivalent portion), so the plan reads as flexible rather than fixed —
+ * "eventuali sostituzioni complementari" from the same food pool, never
+ * repeating the item actually chosen. */
+function buildSubstitutes(pool: string[], seed: number, primaryId: string, targetKcal: number) {
+  const substitutes: PlanMealItem['substitutes'] = [];
+  for (let offset = 1; offset < pool.length && substitutes.length < 2; offset++) {
+    const id = pick(pool, seed + offset);
+    if (id === primaryId || substitutes.some((s) => s.name === findFood(id)?.name)) continue;
+    const food = findFood(id);
+    if (!food) continue;
+    const grams = round5((targetKcal / food.kcal100) * 100);
+    substitutes.push({ name: food.name, grams });
+  }
+  return substitutes.length > 0 ? substitutes : undefined;
+}
+
+function buildItem(pool: string[], seed: number, targetKcal: number, portionOverride?: number): PlanMealItem {
+  const primaryId = pick(pool, seed);
+  const food = findFood(primaryId)!;
+  const grams = portionOverride ?? round5((targetKcal / food.kcal100) * 100);
+  const kcal = Math.round((food.kcal100 * grams) / 100);
+  return {
+    name: food.name,
+    grams,
+    kcal,
+    // Substitutes match the *actual* kcal this item ended up at (not the
+    // raw target), so a fixed-portion item (veg/fruit) still gets swaps
+    // sized to roughly the same calories rather than a near-zero portion.
+    substitutes: buildSubstitutes(pool, seed, primaryId, kcal),
+  };
+}
+
+function buildDayMeals(seed: number, calorieTarget: number, pools: ReturnType<typeof buildFoodPools>): PlanMeal[] {
   return MEAL_SLOTS.map((slot, slotIdx) => {
     const slotKcal = calorieTarget * slot.sharePct;
     const isMain = slot.sharePct >= 0.2;
-    const proteinFood = findFood(pick(pools.protein, seed + slotIdx))!;
-    const carbFood = findFood(pick(pools.carbs, seed + slotIdx + 1))!;
+    const slotSeed = seed + slotIdx;
 
-    const items: PlanMealItem[] = [];
-
-    const proteinGrams = round5((slotKcal * 0.4) / proteinFood.kcal100 * 100);
-    items.push({ name: proteinFood.name, grams: proteinGrams, kcal: Math.round((proteinFood.kcal100 * proteinGrams) / 100) });
-
-    const carbGrams = round5((slotKcal * 0.35) / carbFood.kcal100 * 100);
-    items.push({ name: carbFood.name, grams: carbGrams, kcal: Math.round((carbFood.kcal100 * carbGrams) / 100) });
+    const items: PlanMealItem[] = [
+      buildItem(pools.protein, slotSeed, slotKcal * 0.4),
+      buildItem(pools.carbs, slotSeed + 1, slotKcal * 0.35),
+    ];
 
     if (isMain) {
-      const fatFood = findFood(pick(pools.fats, seed + slotIdx))!;
-      const fatGrams = round5((slotKcal * 0.25) / fatFood.kcal100 * 100);
-      items.push({ name: fatFood.name, grams: fatGrams, kcal: Math.round((fatFood.kcal100 * fatGrams) / 100) });
-
-      const veg = findFood(pick(pools.vegetables, seed + slotIdx))!;
-      items.push({ name: veg.name, grams: 150, kcal: Math.round((veg.kcal100 * 150) / 100) });
+      items.push(buildItem(pools.fats, slotSeed, slotKcal * 0.25));
+      items.push(buildItem(pools.vegetables, slotSeed, 0, 150));
     } else {
-      const fruit = findFood(pick(pools.fruit, seed + slotIdx))!;
-      items.push({ name: fruit.name, grams: fruit.defaultPortionG, kcal: Math.round((fruit.kcal100 * fruit.defaultPortionG) / 100) });
+      const fruitId = pick(pools.fruit, slotSeed);
+      const fruit = findFood(fruitId)!;
+      items.push(buildItem(pools.fruit, slotSeed, 0, fruit.defaultPortionG));
     }
 
     const totalKcal = items.reduce((sum, item) => sum + item.kcal, 0);
     return { slotId: slot.id, label: slot.label, time: slot.time, items, totalKcal };
   });
+}
+
+/** One full week of day-by-day meals for the month — each weekday gets its
+ * own rotation through the food pools (rather than one "example day"
+ * repeated), so the plan reads as an actual schedule to follow. */
+function buildWeeklySplit(monthIndex: number, calorieTarget: number, pools: ReturnType<typeof buildFoodPools>): DietDayPlan[] {
+  return WEEKDAY_LABELS.map((weekday, dayIdx) => ({
+    weekday,
+    meals: buildDayMeals((monthIndex - 1) * 7 + dayIdx, calorieTarget, pools),
+  }));
 }
 
 export function generateDietPlan(input: DietPlanInput): DietPlan {
@@ -116,7 +153,7 @@ export function generateDietPlan(input: DietPlanInput): DietPlan {
       focusNote: phaseNote(phase, goal),
       calorieTarget,
       macroTargetsG: macros,
-      sampleDay: buildSampleDay(monthIndex, calorieTarget, pools),
+      weeklySplit: buildWeeklySplit(monthIndex, calorieTarget, pools),
     });
   }
 

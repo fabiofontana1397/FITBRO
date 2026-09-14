@@ -2,7 +2,7 @@ import * as Print from 'expo-print';
 
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 
-import type { DietPlan } from './types';
+import type { DietPlan, PlanMealItem } from './types';
 
 // Native only — expo-print's `html` param works correctly here. The web
 // build resolves to pdf-export.web.ts instead (a real client-side PDF via
@@ -11,6 +11,15 @@ import type { DietPlan } from './types';
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** "Petto di pollo (150g)" plus, when the plan offers same-role swaps,
+ * " — in alternativa: Tonno (150g), Uova (180g)" appended after it. */
+function formatItem(item: PlanMealItem): string {
+  const base = `${item.name} (${item.grams}g)`;
+  if (!item.substitutes?.length) return base;
+  const subs = item.substitutes.map((s) => `${s.name} (${s.grams}g)`).join(', ');
+  return `${base} — in alternativa: ${subs}`;
 }
 
 const BRAND_STYLE = `
@@ -38,9 +47,10 @@ const BASE_STYLE = `
   table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; }
   th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
   th { background: #f5f5f5; }
+  td.day { font-weight: 700; background: #fff8f5; }
   .meta { font-size: 11px; color: #666; margin-bottom: 18px; }
   .tag { display: inline-block; background: #fff1ea; color: #c23d0d; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; margin-bottom: 4px; }
-  .month { page-break-inside: avoid; margin-bottom: 22px; }
+  .month { margin-bottom: 22px; }
   .footer { margin-top: 24px; font-size: 10px; color: #999; }
 `;
 
@@ -65,15 +75,21 @@ function htmlShell(title: string, userName: string, meta: string, body: string):
 export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
   const monthsHtml = plan.months
     .map((month) => {
-      const rows = month.sampleDay
-        .map(
-          (meal) => `
+      const rows = month.weeklySplit
+        .map((day) => {
+          const dayHeading = `<tr><td class="day" colspan="3">${escapeHtml(day.weekday)}</td></tr>`;
+          const mealRows = day.meals
+            .map(
+              (meal) => `
         <tr>
           <td>${escapeHtml(meal.time)} · ${escapeHtml(meal.label)}</td>
-          <td>${meal.items.map((i) => escapeHtml(`${i.name} (${i.grams}g)`)).join(', ')}</td>
+          <td>${meal.items.map((i) => escapeHtml(formatItem(i))).join('<br/>')}</td>
           <td>${meal.totalKcal} kcal</td>
         </tr>`
-        )
+            )
+            .join('');
+          return dayHeading + mealRows;
+        })
         .join('');
 
       return `
@@ -81,7 +97,6 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
         <h2>${escapeHtml(month.title)}</h2>
         <p>${escapeHtml(month.focusNote)}</p>
         <p><strong>${month.calorieTarget} kcal/giorno</strong> · Proteine ${month.macroTargetsG.protein}g · Carboidrati ${month.macroTargetsG.carbs}g · Grassi ${month.macroTargetsG.fats}g</p>
-        <h3>Esempio di giornata</h3>
         <table>
           <thead><tr><th>Pasto</th><th>Alimenti</th><th>Totale</th></tr></thead>
           <tbody>${rows}</tbody>

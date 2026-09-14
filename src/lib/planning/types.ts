@@ -2,7 +2,15 @@ import type { Goal } from '@/lib/mock/types';
 
 export type PlanPhaseKind = 'adattamento' | 'progressione' | 'consolidamento';
 
-export type PlanMealItem = { name: string; grams: number; kcal: number };
+export type PlanMealItemSubstitute = { name: string; grams: number };
+
+export type PlanMealItem = {
+  name: string;
+  grams: number;
+  kcal: number;
+  /** Same nutritional role (protein/carb/fat/veg/fruit), swappable 1-for-1. */
+  substitutes?: PlanMealItemSubstitute[];
+};
 
 export type PlanMeal = {
   slotId: string;
@@ -12,6 +20,11 @@ export type PlanMeal = {
   totalKcal: number;
 };
 
+export type DietDayPlan = {
+  weekday: string;
+  meals: PlanMeal[];
+};
+
 export type DietMonthPlan = {
   monthIndex: number;
   phase: PlanPhaseKind;
@@ -19,7 +32,7 @@ export type DietMonthPlan = {
   focusNote: string;
   calorieTarget: number;
   macroTargetsG: { protein: number; carbs: number; fats: number };
-  sampleDay: PlanMeal[];
+  weeklySplit: DietDayPlan[];
 };
 
 export type DietPlan = {

@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 
-import type { DietPlan } from './types';
+import type { DietPlan, PlanMealItem } from './types';
 
 // Web build of pdf-export — resolved automatically instead of pdf-export.ts
 // by Metro/TS on web. expo-print's web shim ignores the `html` it's given
@@ -43,6 +43,16 @@ function drawLetterhead(doc: jsPDF, pageWidth: number): number {
   doc.setDrawColor(230, 230, 230);
   doc.line(MARGIN, y, pageWidth - MARGIN, y);
   return y + 26;
+}
+
+/** "Petto di pollo (150g)" plus, when the plan offers same-role swaps,
+ * a second line "in alternativa: Tonno (150g), Uova (180g)" — autoTable
+ * renders \n as separate lines within a cell. */
+function formatItem(item: PlanMealItem): string {
+  const base = `${item.name} (${item.grams}g)`;
+  if (!item.substitutes?.length) return base;
+  const subs = item.substitutes.map((s) => `${s.name} (${s.grams}g)`).join(', ');
+  return `${base}\nin alternativa: ${subs}`;
 }
 
 function drawFooter(doc: jsPDF, pageWidth: number, pageHeight: number) {
@@ -104,15 +114,19 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
     autoTable(doc, {
       startY: y,
       margin: { left: MARGIN, right: MARGIN },
-      head: [['Pasto', 'Alimenti', 'Totale']],
-      body: month.sampleDay.map((meal) => [
-        `${meal.time} · ${meal.label}`,
-        meal.items.map((i) => `${i.name} (${i.grams}g)`).join(', '),
-        `${meal.totalKcal} kcal`,
-      ]),
-      styles: { fontSize: 9, cellPadding: 6, textColor: BODY },
+      head: [['Giorno', 'Pasto', 'Alimenti', 'Totale']],
+      body: month.weeklySplit.flatMap((day) =>
+        day.meals.map((meal) => [
+          day.weekday,
+          `${meal.time}\n${meal.label}`,
+          meal.items.map((i) => formatItem(i)).join('\n'),
+          `${meal.totalKcal} kcal`,
+        ])
+      ),
+      styles: { fontSize: 9, cellPadding: 6, textColor: BODY, valign: 'top' },
       headStyles: { fillColor: ORANGE, textColor: 255 },
       alternateRowStyles: { fillColor: [247, 247, 248] },
+      columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 70 }, 3: { cellWidth: 55 } },
     });
   });
 
