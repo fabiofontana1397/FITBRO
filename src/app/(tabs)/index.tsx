@@ -101,58 +101,59 @@ export default function HomeScreen() {
 
   const weightHistory = useMemo(() => bodyEntries.map((e) => ({ date: e.date, value: e.weightKg })), [bodyEntries]);
 
-  // A guide toward the goal, one point per MONTH of the plan — "the weight
-  // this month's calorie target implies by its end" — rather than a single
-  // flat weekly rate: recomputes maintenance (TDEE) from the running
-  // projected weight via the same formula onboarding used, against THAT
-  // month's own calorie target (diet plans nudge month 1 easier, then hold
-  // steady — see diet-planner.ts monthCalorieTarget), compounding forward
-  // month by month. Not a real forecast, just an illustration of where the
-  // plan as currently set is heading.
-  const weightProjection = useMemo(() => {
+  // The plan's OWN intended trajectory — one grey milestone per month,
+  // same count as the training/nutrition plan's own duration, fixed to
+  // when the plan started rather than recalculated from "today" — so it
+  // reads as a roadmap real progress can be checked against, not a
+  // forecast that keeps sliding. Recomputes maintenance (TDEE) against
+  // each month's own calorie target (diet plans nudge month 1 easier, then
+  // hold steady — see diet-planner.ts monthCalorieTarget), compounding
+  // forward and holding flat once the target is reached rather than
+  // overshooting past it in later months.
+  const monthlyGuide = useMemo(() => {
     const targetWeightKg = currentUser.targetWeightKg;
-    if (Math.abs(latestBody.weightKg - targetWeightKg) < 0.05) return [];
+    const totalMonths = dietPlan?.durationMonths ?? trainingPlan?.durationMonths ?? 0;
+    if (totalMonths === 0) return [];
 
     const months = dietPlan
-      ? dietPlan.months.filter((m) => m.monthIndex >= currentMonthIndex(dietPlan)).map((m) => ({ calorieTarget: m.calorieTarget }))
-      : Array.from({ length: 6 }, () => ({ calorieTarget: currentUser.dailyCalorieTarget }));
+      ? [...dietPlan.months].sort((a, b) => a.monthIndex - b.monthIndex).map((m) => ({ calorieTarget: m.calorieTarget }))
+      : Array.from({ length: totalMonths }, () => ({ calorieTarget: currentUser.dailyCalorieTarget }));
 
-    const points: { date: string; value: number }[] = [{ date: today, value: latestBody.weightKg }];
-    let weight = latestBody.weightKg;
-    let cursorDate = today;
+    const planStartDate = (dietPlan?.generatedAt ?? trainingPlan?.generatedAt ?? today).slice(0, 10);
+    const points: { date: string; value: number }[] = [];
+    let weight = startBody.weightKg;
+    let reached = Math.abs(weight - targetWeightKg) < 0.05;
+    let cursorDate = planStartDate;
 
     for (const month of months) {
-      const { tdee } = computeNutritionTargets({
-        sex: currentUser.sex,
-        ageRange: currentUser.ageRange,
-        heightCm: currentUser.heightCm,
-        currentWeightKg: weight,
-        goal: currentUser.goal,
-        jobActivity: onboardingAnswers.jobActivity as string | undefined,
-        weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
-      });
-      const dailyDeficit = tdee - month.calorieTarget;
-      const monthlyChangeKg = -(dailyDeficit * 30) / 7700; // ~7700kcal per kg of fat
       cursorDate = addDaysISO(cursorDate, 30);
-
-      const movingTowardTarget = monthlyChangeKg < 0 ? targetWeightKg < weight : monthlyChangeKg > 0 ? targetWeightKg > weight : false;
-      if (!movingTowardTarget) {
-        // This month's own target wouldn't move things (e.g. month 1's
-        // gentler nudge) — hold flat and keep going, rather than cutting
-        // the whole guide short over one month.
-        points.push({ date: cursorDate, value: weight });
-        continue;
+      if (!reached) {
+        const { tdee } = computeNutritionTargets({
+          sex: currentUser.sex,
+          ageRange: currentUser.ageRange,
+          heightCm: currentUser.heightCm,
+          currentWeightKg: weight,
+          goal: currentUser.goal,
+          jobActivity: onboardingAnswers.jobActivity as string | undefined,
+          weeklyTrainingDays: deriveWeeklyTrainingDays(onboardingAnswers),
+        });
+        const dailyDeficit = tdee - month.calorieTarget;
+        const monthlyChangeKg = -(dailyDeficit * 30) / 7700; // ~7700kcal per kg of fat
+        const movingTowardTarget = monthlyChangeKg < 0 ? targetWeightKg < weight : monthlyChangeKg > 0 ? targetWeightKg > weight : false;
+        if (movingTowardTarget) {
+          weight += monthlyChangeKg;
+          const crossed = monthlyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
+          if (crossed) {
+            weight = targetWeightKg;
+            reached = true;
+          }
+        }
       }
-
-      weight += monthlyChangeKg;
-      const reached = monthlyChangeKg < 0 ? weight <= targetWeightKg : weight >= targetWeightKg;
-      if (reached) weight = targetWeightKg;
       points.push({ date: cursorDate, value: weight });
-      if (reached) break;
     }
 
-    return points.length > 1 ? points : [];
-  }, [currentUser, latestBody.weightKg, onboardingAnswers, dietPlan, today]);
+    return points;
+  }, [currentUser, startBody.weightKg, onboardingAnswers, dietPlan, trainingPlan, today]);
 
   // One entry per weekday of the CURRENT calendar week — past days read
   // from what was actually logged, today is live, and days still ahead
@@ -236,7 +237,7 @@ export default function HomeScreen() {
       <ScreenHeader eyebrow={`${greeting()}`} title={currentUser.name} />
 
       <View>
-        <SectionHeader title="Obiettivo peso" action="Vedi corpo" onActionPress={() => router.push('/body')} />
+        <SectionHeader title="Obiettivo" action="Vedi corpo" onActionPress={() => router.push('/body')} />
         <GlassSurface level="card" radius={Radius.large} style={styles.goalCard}>
           <View style={styles.goalHeaderRow}>
             <View style={{ gap: 2 }}>
@@ -279,11 +280,11 @@ export default function HomeScreen() {
 
           <GoalTrendChart
             history={weightHistory}
-            projection={weightProjection}
+            guide={monthlyGuide}
             target={currentUser.targetWeightKg}
-            height={172}
+            height={180}
             color={theme.accent}
-            projectionColor={theme.accent}
+            guideColor={theme.textTertiary}
             targetColor={theme.success}
             axisColor={theme.textTertiary}
           />
@@ -309,25 +310,47 @@ export default function HomeScreen() {
 
         <GlassSurface level="card" radius={Radius.large} style={styles.burnCard}>
           <View style={{ gap: 2 }}>
-            <ThemedText type="smallBold">Calorie bruciate</ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              Oggi {Math.round(todayBurn?.burnedKcal ?? 0)} kcal · Settimana {Math.round(weekBurnedSoFar)} kcal
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: todayDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
-              Deficit oggi {todayDeficit >= 0 ? '+' : ''}
-              {Math.round(todayDeficit)} kcal · settimana {weekDeficit >= 0 ? '+' : ''}
-              {Math.round(weekDeficit)} kcal
-            </ThemedText>
+            <View style={styles.burnHeaderRow}>
+              <ThemedText type="smallBold">Calorie bruciate e assunte</ThemedText>
+              <View style={[styles.weekDeltaChip, { backgroundColor: (weekDeficit >= 0 ? theme.success : theme.danger) + '26' }]}>
+                <ThemedText type="caption" style={{ color: weekDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
+                  {weekDeficit >= 0 ? '+' : ''}
+                  {Math.round(weekDeficit)} kcal/sett.
+                </ThemedText>
+              </View>
+            </View>
+            <View style={styles.burnLegendRow}>
+              <View style={styles.burnLegendItem}>
+                <View style={[styles.burnLegendDot, { backgroundColor: theme.accent }]} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Bruciate
+                </ThemedText>
+              </View>
+              <View style={styles.burnLegendItem}>
+                <View style={[styles.burnLegendDot, { backgroundColor: theme.success }]} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Assunte
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ marginLeft: 'auto', color: todayDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
+                Oggi {todayDeficit >= 0 ? '+' : ''}
+                {Math.round(todayDeficit)} kcal
+              </ThemedText>
+            </View>
           </View>
           <WeeklyBurnChart
             days={weekDays.map((d) => ({
               label: d.label,
               burnedKcal: d.burnedKcal,
+              eatenKcal: d.eatenKcal,
               isToday: d.isToday,
               hasHappened: d.hasHappened,
               rings: { training: d.trainingProgress, diet: d.dietProgress, steps: d.stepsProgress },
             }))}
-            color={theme.accent}
+            burnedColor={theme.accent}
+            eatenColor={theme.success}
+            deficitColor={theme.success}
+            surplusColor={theme.danger}
             trackColor={theme.backgroundElement}
             axisColor={theme.textTertiary}
             todayBadgeColor={theme.accent}
@@ -527,6 +550,31 @@ const styles = StyleSheet.create({
     marginTop: Spacing.three,
     gap: Spacing.three,
     padding: Spacing.four,
+  },
+  burnHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  weekDeltaChip: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+  },
+  burnLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  burnLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  burnLegendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   ringsStack: {
     alignItems: 'center',

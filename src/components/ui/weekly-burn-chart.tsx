@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import { Text, View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
 
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { ThemedText } from '@/components/themed-text';
@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 export type WeeklyBurnDay = {
   label: string;
   burnedKcal: number;
+  eatenKcal: number;
   isToday: boolean;
   hasHappened: boolean;
   rings: { training: number; diet: number; steps: number };
@@ -16,7 +17,10 @@ export type WeeklyBurnDay = {
 
 export type WeeklyBurnChartProps = {
   days: WeeklyBurnDay[];
-  color: string;
+  burnedColor: string;
+  eatenColor: string;
+  deficitColor: string;
+  surplusColor: string;
   trackColor: string;
   axisColor: string;
   todayBadgeColor: string;
@@ -28,69 +32,63 @@ export type WeeklyBurnChartProps = {
   height?: number;
 };
 
-const PADDING_LEFT = 34;
-const PADDING_RIGHT = 10;
-const PADDING_TOP = 14;
+const PADDING_LEFT = 30;
+const PADDING_RIGHT = 6;
+const PADDING_TOP = 20;
 const PADDING_BOTTOM = 4;
+const BAR_GAP = 3;
 
-function buildLine(days: WeeklyBurnDay[], width: number, height: number) {
-  const empty = { solidPath: '', area: '', dashedPath: '', lastPoint: undefined, yTicks: [] as { y: number; label: string }[] };
-  if (days.length < 2 || width <= 0) return empty;
+function buildBars(days: WeeklyBurnDay[], width: number, height: number) {
+  if (width <= 0 || days.length === 0) return { bars: [], yTicks: [] as { y: number; label: string }[] };
 
-  // Every day already has an estimated burn (today/past from real data, days
-  // ahead from baseline BMR alone) — the chart always has something to draw
-  // even right after the week starts, rather than staying blank until
-  // several days have actually happened.
-  const values = days.map((d) => d.burnedKcal);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+  const values = days.flatMap((d) => [d.burnedKcal, d.hasHappened ? d.eatenKcal : 0]);
+  const max = Math.max(...values, 1);
 
   const plotWidth = width - PADDING_LEFT - PADDING_RIGHT;
   const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
-  const stepX = plotWidth / (days.length - 1);
+  const colWidth = plotWidth / days.length;
+  const barWidth = Math.max(6, Math.min(14, colWidth * 0.3));
 
-  const toY = (value: number) => PADDING_TOP + plotHeight * (1 - (value - min) / range);
-  const allPoints = days.map((d, i) => ({ x: PADDING_LEFT + i * stepX, y: toY(d.burnedKcal) }));
-
-  let lastKnownIndex = -1;
-  days.forEach((d, i) => {
-    if (d.hasHappened) lastKnownIndex = i;
+  const bars = days.map((day, i) => {
+    const colX = PADDING_LEFT + i * colWidth + colWidth / 2;
+    const burnedH = (day.burnedKcal / max) * plotHeight;
+    const eatenH = day.hasHappened ? (day.eatenKcal / max) * plotHeight : 0;
+    const delta = day.hasHappened ? day.burnedKcal - day.eatenKcal : null;
+    return {
+      colX,
+      burnedX: colX - barWidth - BAR_GAP / 2,
+      eatenX: colX + BAR_GAP / 2,
+      burnedY: PADDING_TOP + plotHeight - burnedH,
+      eatenY: PADDING_TOP + plotHeight - eatenH,
+      burnedH,
+      eatenH,
+      barWidth,
+      delta,
+      topY: PADDING_TOP + plotHeight - Math.max(burnedH, eatenH, 1),
+    };
   });
 
-  const solidPoints = allPoints.slice(0, lastKnownIndex + 1);
-  // Starts at the last real day so the dashed line picks up exactly where
-  // the solid one ends, same as the goal-weight chart's projection.
-  const dashedPoints = allPoints.slice(Math.max(lastKnownIndex, 0));
-
-  const toPath = (points: { x: number; y: number }[]) =>
-    points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
-
-  const solidPath = solidPoints.length >= 2 ? toPath(solidPoints) : '';
-  const area = solidPath
-    ? `${solidPath} L ${solidPoints[solidPoints.length - 1].x.toFixed(2)} ${height} L ${solidPoints[0].x.toFixed(2)} ${height} Z`
-    : '';
-  const dashedPath = dashedPoints.length >= 2 ? toPath(dashedPoints) : '';
-
   const yTicks = [
-    { y: toY(max), label: `${Math.round(max)}` },
-    { y: toY(min), label: `${Math.round(min)}` },
+    { y: PADDING_TOP, label: `${Math.round(max)}` },
+    { y: PADDING_TOP + plotHeight, label: '0' },
   ];
 
-  return { solidPath, area, dashedPath, lastPoint: lastKnownIndex >= 0 ? allPoints[lastKnownIndex] : undefined, yTicks };
+  return { bars, yTicks };
 }
 
-/** A week-at-a-glance card: a trend line of estimated daily calories
- * burned (basal metabolism plus a bump on days a planned workout was
- * actually completed) — solid through today, dashed for the rest of the
- * week (baseline burn only, no workout bump yet) so the chart never sits
- * empty right after the week starts — and below it one small concentric-
- * ring badge per weekday summarizing that day's training/diet/steps; days
- * that haven't happened yet simply read as empty rings rather than a fake
- * plan hitting 0%. */
+/** A week-at-a-glance card: paired bars of estimated calories burned
+ * (basal metabolism plus a bump on days a planned workout was actually
+ * completed) versus calories actually eaten, with the resulting daily
+ * deficit/surplus called out above each day in color — and below it one
+ * small concentric-ring badge per weekday summarizing that day's
+ * training/diet/steps. Days that haven't happened yet show only the
+ * (baseline) burn bar, no eaten bar and no delta, rather than a fake 0. */
 export function WeeklyBurnChart({
   days,
-  color,
+  burnedColor,
+  eatenColor,
+  deficitColor,
+  surplusColor,
   trackColor,
   axisColor,
   todayBadgeColor,
@@ -99,12 +97,12 @@ export function WeeklyBurnChart({
   dietColor,
   stepsColor,
   width,
-  height = 120,
+  height = 130,
 }: WeeklyBurnChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(width ?? 0);
   const chartWidth = width ?? measuredWidth;
 
-  const { solidPath, area, dashedPath, lastPoint, yTicks } = useMemo(() => buildLine(days, chartWidth, height), [days, chartWidth, height]);
+  const { bars, yTicks } = useMemo(() => buildBars(days, chartWidth, height), [days, chartWidth, height]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     if (width == null) setMeasuredWidth(e.nativeEvent.layout.width);
@@ -114,27 +112,57 @@ export function WeeklyBurnChart({
     <View onLayout={onLayout} style={{ width: width ?? '100%' }}>
       <View style={{ width: chartWidth > 0 ? chartWidth : '100%', height }}>
         {chartWidth > 0 ? (
-          <Svg width={chartWidth} height={height}>
-            <Defs>
-              <LinearGradient id="weeklyBurnFill" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={color} stopOpacity={0.28} />
-                <Stop offset="1" stopColor={color} stopOpacity={0} />
-              </LinearGradient>
-            </Defs>
+          <>
+            <Svg width={chartWidth} height={height}>
+              {bars.map((bar, i) => (
+                <Rect
+                  key={`burned-${i}`}
+                  x={bar.burnedX}
+                  y={bar.burnedY}
+                  width={bar.barWidth}
+                  height={Math.max(bar.burnedH, 1)}
+                  rx={2}
+                  fill={burnedColor}
+                />
+              ))}
+              {bars.map((bar, i) =>
+                days[i].hasHappened ? (
+                  <Rect key={`eaten-${i}`} x={bar.eatenX} y={bar.eatenY} width={bar.barWidth} height={Math.max(bar.eatenH, 1)} rx={2} fill={eatenColor} />
+                ) : null
+              )}
+            </Svg>
+
+            {/* Y-axis value labels — plain RN Text, not SVG <Text>, for
+                reliable cross-platform rendering. */}
             {yTicks.map((tick, i) => (
-              <SvgText key={i} x={PADDING_LEFT - 6} y={tick.y + 4} fontSize={10} fill={axisColor} textAnchor="end">
+              <Text
+                key={i}
+                style={{ position: 'absolute', left: 0, width: PADDING_LEFT - 4, top: tick.y - 6, fontSize: 9, color: axisColor, textAlign: 'right' }}>
                 {tick.label}
-              </SvgText>
+              </Text>
             ))}
-            {area ? <Path d={area} fill="url(#weeklyBurnFill)" /> : null}
-            {dashedPath ? (
-              <Path d={dashedPath} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 5" />
-            ) : null}
-            {solidPath ? (
-              <Path d={solidPath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            ) : null}
-            {lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} /> : null}
-          </Svg>
+
+            {/* Daily deficit/surplus, called out above each day's bars. */}
+            {bars.map((bar, i) =>
+              bar.delta != null ? (
+                <Text
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    left: bar.colX - 22,
+                    width: 44,
+                    top: Math.max(bar.topY - 13, 0),
+                    fontSize: 9,
+                    fontWeight: '700',
+                    textAlign: 'center',
+                    color: bar.delta >= 0 ? deficitColor : surplusColor,
+                  }}>
+                  {bar.delta >= 0 ? '+' : ''}
+                  {Math.round(bar.delta)}
+                </Text>
+              ) : null
+            )}
+          </>
         ) : null}
       </View>
 
