@@ -7,6 +7,7 @@ import { GoalTrendChart } from '@/components/ui/goal-trend-chart';
 import { InsightCard } from '@/components/ui/insight-card';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
+import { WeeklyBurnChart } from '@/components/ui/weekly-burn-chart';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
@@ -15,9 +16,10 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
-import { addDaysISO, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
+import { addDaysISO, currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
-import { computeNutritionTargets, deriveWeeklyTrainingDays } from '@/lib/nutrition/targets';
+import { computeNutritionTargets, deriveWeeklyTrainingDays, estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
+import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
 import { useBodyStore } from '@/store/body-store';
@@ -139,6 +141,58 @@ export default function HomeScreen() {
     return points;
   }, [currentUser, latestBody.weightKg, onboardingAnswers, calorieTarget, today]);
 
+  // One entry per weekday of the CURRENT calendar week — past days read
+  // from what was actually logged, today is live, and days still ahead
+  // simply have nothing yet (0% rings, no burn plotted) rather than a
+  // fabricated forecast.
+  const weekDates = useMemo(() => currentWeekDates(new Date()), []);
+  const weekDays = useMemo(() => {
+    const monthIdx = trainingPlan ? currentMonthIndex(trainingPlan) : null;
+    const month = trainingPlan?.months.find((m) => m.monthIndex === monthIdx);
+    const split = month?.weeklySplit ?? [];
+
+    return weekDates.map((date, i) => {
+      const dayPlan = split[i];
+      const exercises = dayPlan?.type === 'workout' ? (dayPlan.exercises ?? []) : [];
+      const completed = exercises.filter((ex) => isExerciseCompleted(completedExercises, ex.id, date)).length;
+      const dayTrainingProgress = dayPlan?.type === 'workout' ? (exercises.length > 0 ? completed / exercises.length : 1) : 1;
+      const trainedThisDay = dayPlan?.type === 'workout' && exercises.length > 0 && completed === exercises.length;
+
+      const dayTotals = sumMacros(nutritionEntries.filter((e) => e.date === date));
+      const dayDietProgress = calorieTarget > 0 ? Math.min(dayTotals.kcal / calorieTarget, 1) : 0;
+
+      const stepsEntry = stepsHistory.find((s) => s.date === date);
+      const dayStepsProgress = stepsEntry ? Math.min(stepsEntry.steps / dailyStepsTarget, 1) : 0;
+
+      const burnedKcal = estimateDailyBurnedKcal({
+        sex: currentUser.sex,
+        ageRange: currentUser.ageRange,
+        heightCm: currentUser.heightCm,
+        weightKg: latestBody.weightKg,
+        jobActivity: onboardingAnswers.jobActivity as string | undefined,
+        trainedThisDay,
+      });
+
+      return {
+        date,
+        label: WEEKDAY_LABELS[i][0],
+        isToday: date === today,
+        hasHappened: date <= today,
+        trainingProgress: dayTrainingProgress,
+        dietProgress: dayDietProgress,
+        stepsProgress: dayStepsProgress,
+        burnedKcal,
+        eatenKcal: dayTotals.kcal,
+      };
+    });
+  }, [trainingPlan, weekDates, completedExercises, nutritionEntries, calorieTarget, currentUser, latestBody.weightKg, onboardingAnswers, today]);
+
+  const todayBurn = weekDays.find((d) => d.isToday);
+  const weekBurnedSoFar = weekDays.filter((d) => d.hasHappened).reduce((sum, d) => sum + d.burnedKcal, 0);
+  const weekEatenSoFar = weekDays.filter((d) => d.hasHappened).reduce((sum, d) => sum + d.eatenKcal, 0);
+  const weekDeficit = weekBurnedSoFar - weekEatenSoFar;
+  const todayDeficit = todayBurn ? todayBurn.burnedKcal - todayBurn.eatenKcal : 0;
+
   // Every exercise appearing anywhere in the plan (same de-duplication
   // training-progress.tsx uses), so "recent" lifts aren't limited to today.
   const exercisesInPlan = useMemo(() => {
@@ -210,6 +264,37 @@ export default function HomeScreen() {
             <OverviewLegendRow icon="nutrition" color={theme.success} label="Dieta" value={`${Math.round(dietProgress * 100)}%`} />
             <OverviewLegendRow icon="footsteps" color={theme.warning} label="Passi" value={`${Math.round(stepsProgress * 100)}%`} />
           </View>
+        </GlassSurface>
+
+        <GlassSurface level="card" radius={Radius.large} style={styles.burnCard}>
+          <View style={{ gap: 2 }}>
+            <ThemedText type="smallBold">Calorie bruciate</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Oggi {Math.round(todayBurn?.burnedKcal ?? 0)} kcal · Settimana {Math.round(weekBurnedSoFar)} kcal
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: todayDeficit >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
+              Deficit oggi {todayDeficit >= 0 ? '+' : ''}
+              {Math.round(todayDeficit)} kcal · settimana {weekDeficit >= 0 ? '+' : ''}
+              {Math.round(weekDeficit)} kcal
+            </ThemedText>
+          </View>
+          <WeeklyBurnChart
+            days={weekDays.map((d) => ({
+              label: d.label,
+              burnedKcal: d.burnedKcal,
+              isToday: d.isToday,
+              hasHappened: d.hasHappened,
+              rings: { training: d.trainingProgress, diet: d.dietProgress, steps: d.stepsProgress },
+            }))}
+            color={theme.accent}
+            trackColor={theme.backgroundElement}
+            axisColor={theme.textTertiary}
+            todayBadgeColor={theme.accent}
+            todayBadgeTextColor={theme.onAccent}
+            trainingColor={theme.accent}
+            dietColor={theme.success}
+            stepsColor={theme.warning}
+          />
         </GlassSurface>
       </View>
 
@@ -381,6 +466,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.four,
+    padding: Spacing.four,
+  },
+  burnCard: {
+    marginTop: Spacing.three,
+    gap: Spacing.three,
     padding: Spacing.four,
   },
   ringsStack: {

@@ -102,3 +102,27 @@ export function computeNutritionTargets(input: NutritionTargetsInput): Nutrition
     hydrationTargetMl,
   };
 }
+
+/** How much a completed session on the plan raises a day's output over
+ * baseline job activity alone — an illustrative estimate (workouts vary
+ * far more in real burn than this), not a per-exercise calculation, since
+ * the plan doesn't track set-by-set intensity or duration. */
+const TRAINING_DAY_BURN_BUMP = 0.18;
+
+/** A single day's estimated total calories burned: basal metabolism times
+ * the same job-activity multiplier TDEE uses, plus a bump only for days
+ * whose planned workout was actually completed — not just planned. */
+export function estimateDailyBurnedKcal(input: {
+  sex: Sex;
+  ageRange: string;
+  heightCm: number;
+  weightKg: number;
+  jobActivity?: string;
+  trainedThisDay: boolean;
+}): number {
+  const age = AGE_RANGE_MIDPOINT[input.ageRange] ?? 30;
+  const bmr = bmrMifflinStJeor(input.sex, input.weightKg, input.heightCm, age);
+  const jobMultiplier = JOB_ACTIVITY_MULTIPLIER[input.jobActivity ?? 'sedentary'] ?? 1.2;
+  const multiplier = jobMultiplier + (input.trainedThisDay ? TRAINING_DAY_BURN_BUMP : 0);
+  return Math.round(bmr * multiplier);
+}
