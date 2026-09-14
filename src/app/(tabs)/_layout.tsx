@@ -14,15 +14,19 @@ import { ChatFab } from '@/components/chat/chat-fab';
 // opening chat). Keeping it external and only visually docked beside the
 // bar (via matching absolute-position math in ChatFab) avoids that.
 //
-// barHeight is measured live off the tab bar's own rendered layout (rather
-// than assumed) and handed to ChatFab so the button always matches the
-// bar's actual height, however its content ends up sizing it.
+// barHeight is measured off the tab bar's own rendered layout (rather than
+// assumed) and handed to ChatFab so the button matches the bar's actual
+// height. Locked to the FIRST measurement only (the bar's content never
+// actually changes size, but its onLayout can still refire with a fresh
+// value on every tab switch) — accepting later re-measurements fed a
+// "changed" size into ChatFab/ChatOrb on every navigation, which read as
+// the orb visibly jumping the moment you switched tabs.
 export default function TabLayout() {
   const [barHeight, setBarHeight] = useState<number | null>(null);
 
   return (
     <View style={{ flex: 1 }}>
-      <AppTabs onBarHeightChange={setBarHeight} />
+      <AppTabs onBarHeightChange={(height) => setBarHeight((current) => current ?? height)} />
       <ChatFab size={barHeight} />
     </View>
   );

@@ -2,57 +2,94 @@ import { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import { BlurView } from 'expo-blur';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 
 type Petal = {
-  colors: [string, string, string];
-  orbitDuration: number;
-  direction: 1 | -1;
-  phase: number;
-  /** How much faster the vertical wander is than the horizontal one — a
-   * Lissajous curve rather than a plain circle, so the path never quite
-   * repeats the same way twice and reads as liquid wandering, not a
-   * mechanical orbit. */
-  freqRatio: number;
-  pulseDuration: number;
-  pulseDelay: number;
+  /** Color stops the petal cycles through, first === last so the loop
+   * wraps with no visible seam. The hue itself animates continuously —
+   * this is what guarantees visible color movement no matter how the
+   * blur/compositing behaves on a given platform, since earlier versions
+   * relied on blurred shapes merely translating past each other, which on
+   * some devices barely read as motion at all. */
+  palette: string[];
+  cycleDuration: number;
+  cycleDelay: number;
+  driftDuration: number;
+  driftDirection: 1 | -1;
+  driftPhase: number;
+  driftFreqRatio: number;
 };
 
-// Five oversized, soft-edged "petals" — two of them genuinely dark
-// (near-maroon burnt orange, not just a mid-tone) for real contrast — each
-// wandering along its own Lissajous path (translate, not just rotate) at
-// its own speed/phase, plus breathing (scale+opacity). Actually moving
-// through the sphere rather than spinning a fixed shape in place is what
-// reads as liquid color mixing instead of a slowly-rotating pinwheel, and
-// is still clearly visible once blurred (rotation alone mostly wasn't).
-// Each petal is concentric rings of the SAME hue shading from its rich
-// edge color to a pale warm cream at the center (never pure white).
 const PETALS: Petal[] = [
-  { colors: ['#7A2E0A', '#C24E12', '#FFB37A'], orbitDuration: 2600, direction: 1, phase: 0, freqRatio: 1.3, pulseDuration: 1000, pulseDelay: 0 },
-  { colors: ['#FF5A1F', '#FFA35C', '#FFD9B0'], orbitDuration: 3400, direction: -1, phase: 1.2, freqRatio: 0.7, pulseDuration: 1300, pulseDelay: 150 },
-  { colors: ['#5C1F06', '#B33D0F', '#FF8A46'], orbitDuration: 3000, direction: 1, phase: 2.4, freqRatio: 1.6, pulseDuration: 1150, pulseDelay: 400 },
-  { colors: ['#FFB020', '#FFD98A', '#FFF3D6'], orbitDuration: 3900, direction: -1, phase: 3.6, freqRatio: 0.85, pulseDuration: 1400, pulseDelay: 250 },
-  { colors: ['#E6480F', '#FF8A46', '#FFE0BE'], orbitDuration: 2200, direction: 1, phase: 4.8, freqRatio: 1.15, pulseDuration: 1050, pulseDelay: 550 },
+  {
+    palette: ['#4A1704', '#B23D0E', '#FF7A2E', '#FFC98A', '#B23D0E', '#4A1704'],
+    cycleDuration: 5200,
+    cycleDelay: 0,
+    driftDuration: 3100,
+    driftDirection: 1,
+    driftPhase: 0,
+    driftFreqRatio: 1.3,
+  },
+  {
+    palette: ['#7A2E0A', '#FF5A1F', '#FFD9B0', '#FF5A1F', '#7A2E0A'],
+    cycleDuration: 4400,
+    cycleDelay: 1100,
+    driftDuration: 3800,
+    driftDirection: -1,
+    driftPhase: 1.7,
+    driftFreqRatio: 0.75,
+  },
+  {
+    palette: ['#5C1F06', '#E6480F', '#FFB37A', '#E6480F', '#5C1F06'],
+    cycleDuration: 6000,
+    cycleDelay: 2200,
+    driftDuration: 2600,
+    driftDirection: 1,
+    driftPhase: 3.1,
+    driftFreqRatio: 1.6,
+  },
+  {
+    palette: ['#8A2E00', '#FFB020', '#FFF3D6', '#FFB020', '#8A2E00'],
+    cycleDuration: 5000,
+    cycleDelay: 3300,
+    driftDuration: 3400,
+    driftDirection: -1,
+    driftPhase: 4.4,
+    driftFreqRatio: 0.9,
+  },
 ];
 
-// Ring sizes (fraction of the blob) and opacities shared by every petal —
-// biggest/dimmest ring outermost, smallest/brightest innermost, so each
-// blob reads as a soft radial glow rather than a flat-filled oval.
-const RING_SCALES = [1, 0.72, 0.42];
-const RING_OPACITIES = [0.4, 0.66, 0.92];
+// Two concentric rings (dim/wide outer, bright/small inner) sharing the
+// SAME animated hue per petal — reads as a soft radial glow rather than a
+// flat-filled circle.
+const RING_SCALES = [1, 0.6];
+const RING_OPACITIES = [0.55, 0.95];
 
 // How far (px) the whole petal group drifts toward the phone's tilt — a
-// liquid-in-a-ball feel, on top of (not instead of) the petals' own
-// constant wandering. Silently stays at rest wherever the accelerometer
-// isn't available (web without permission, desktop, etc).
+// liquid-in-a-ball feel, on top of (not instead of) each petal's own hue
+// cycling. Silently stays at rest wherever the accelerometer isn't
+// available (web without permission, desktop, etc).
 const TILT_RANGE = 14;
 
-/** A small "living" AI entity standing in for a literal chat-bubble icon:
- * a warm glass sphere with five shades of orange (two of them deep,
- * near-maroon), each wandering a private Lissajous path and breathing
- * independently behind a soft blur — colors visibly mixing and
- * recombining like liquid rather than settling into a static image, and
- * drifting toward whichever way the phone is tilted. */
+function colorInputRange(paletteLength: number) {
+  return Array.from({ length: paletteLength }, (_, i) => i / (paletteLength - 1));
+}
+
+/** A small "living" AI entity standing in for a literal chat-bubble icon: a
+ * warm glass sphere whose four soft blobs each continuously cycle through
+ * their own dark-orange-to-cream palette (out of phase with each other)
+ * while drifting a private wandering path — colors visibly mixing and
+ * recombining like liquid, and drifting toward whichever way the phone is
+ * tilted. */
 export function ChatOrb({ size }: { size: number }) {
   const { tiltX, tiltY } = useTiltShift();
 
@@ -68,7 +105,7 @@ export function ChatOrb({ size }: { size: number }) {
         ))}
       </Animated.View>
       <BlurView
-        intensity={Platform.OS === 'web' ? 7 : 11}
+        intensity={Platform.OS === 'web' ? 4 : 8}
         tint="light"
         style={StyleSheet.absoluteFill}
         blurMethod="dimezisBlurViewSdk31Plus"
@@ -117,60 +154,57 @@ function useTiltShift() {
 }
 
 function PetalLayer({ petal, size }: { petal: Petal; size: number }) {
-  const orbit = useSharedValue(0);
-  const pulse = useSharedValue(0);
+  const drift = useSharedValue(0);
+  const colorProgress = useSharedValue(0);
+  const colorInputRangeRef = useRef(colorInputRange(petal.palette.length));
 
   useEffect(() => {
-    orbit.value = withRepeat(withTiming(1, { duration: petal.orbitDuration, easing: Easing.linear }), -1, false);
-    pulse.value = withDelay(
-      petal.pulseDelay,
-      withRepeat(withTiming(1, { duration: petal.pulseDuration, easing: Easing.inOut(Easing.sin) }), -1, true)
+    drift.value = withRepeat(withTiming(1, { duration: petal.driftDuration, easing: Easing.linear }), -1, false);
+    colorProgress.value = withDelay(
+      petal.cycleDelay,
+      withRepeat(withTiming(1, { duration: petal.cycleDuration, easing: Easing.linear }), -1, false)
     );
-  }, [orbit, pulse, petal.orbitDuration, petal.pulseDuration, petal.pulseDelay]);
+  }, [drift, colorProgress, petal.driftDuration, petal.cycleDuration, petal.cycleDelay]);
 
   // How far the blob's own center wanders from the sphere's center — a
   // true Lissajous path (different X/Y frequency), not a fixed-radius
   // circular orbit, so it drifts and mixes rather than just spinning.
-  const orbitRadius = size * 0.42;
+  const driftRadius = size * 0.3;
 
-  const style = useAnimatedStyle(() => {
-    const angle = orbit.value * Math.PI * 2 * petal.direction + petal.phase;
-    const x = Math.cos(angle) * orbitRadius;
-    const y = Math.sin(angle * petal.freqRatio) * orbitRadius;
+  const positionStyle = useAnimatedStyle(() => {
+    const angle = drift.value * Math.PI * 2 * petal.driftDirection + petal.driftPhase;
+    const x = Math.cos(angle) * driftRadius;
+    const y = Math.sin(angle * petal.driftFreqRatio) * driftRadius;
+    const breathe = interpolate(Math.sin(angle * 1.7), [-1, 1], [0.85, 1.25]);
     return {
-      opacity: interpolate(pulse.value, [0, 1], [0.55, 1]),
-      transform: [
-        { translateX: x },
-        { translateY: y },
-        { scale: interpolate(pulse.value, [0, 1], [0.75, 1.4]) },
-      ],
+      transform: [{ translateX: x }, { translateY: y }, { scale: breathe }],
     };
   });
 
-  // Previously ~0.9× the sphere — at that size every petal covered nearly
-  // the whole circle at all times, so wandering barely changed what was
-  // visible, and the (much stronger) old blur then smeared what little
-  // changed into a near-static average. Smaller blobs + a wider orbit
-  // radius above mean each petal actually uncovers/reveals the sphere
-  // behind it as it wanders, so the color mixing reads as real movement.
-  const blobSize = size * 0.6;
+  const colorStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(colorProgress.value, colorInputRangeRef.current, petal.palette),
+  }));
+
+  const blobSize = size * 0.68;
 
   return (
-    <Animated.View style={[styles.layer, style]}>
+    <Animated.View style={[styles.layer, positionStyle]}>
       <View style={{ position: 'absolute', width: blobSize, height: blobSize, alignItems: 'center', justifyContent: 'center' }}>
         {RING_SCALES.map((scale, i) => {
           const ringSize = blobSize * scale;
           return (
-            <View
+            <Animated.View
               key={i}
-              style={{
-                position: 'absolute',
-                width: ringSize,
-                height: ringSize,
-                borderRadius: ringSize / 2,
-                backgroundColor: petal.colors[i],
-                opacity: RING_OPACITIES[i],
-              }}
+              style={[
+                {
+                  position: 'absolute',
+                  width: ringSize,
+                  height: ringSize,
+                  borderRadius: ringSize / 2,
+                  opacity: RING_OPACITIES[i],
+                },
+                colorStyle,
+              ]}
             />
           );
         })}
