@@ -20,11 +20,9 @@ export type WeeklyBurnDay = {
 
 export type WeeklyBurnChartProps = {
   days: WeeklyBurnDay[];
-  burnedColor: string;
-  eatenColor: string;
-  /** Color of the delta cap on a surplus day (ate more than burned). */
+  /** Bar color on a surplus day (ate more than burned). */
   surplusColor: string;
-  /** Color of the delta cap on a deficit day (burned more than ate). */
+  /** Bar color on a deficit day (burned more than ate). */
   deficitColor: string;
   trackColor: string;
   axisColor: string;
@@ -39,70 +37,48 @@ export type WeeklyBurnChartProps = {
   height?: number;
 };
 
-const GUTTER_WIDTH = 32;
+// Kept narrow now that it only has to fit a handful of kcal digits, so the
+// ring-badge row below gets as much of the card's width as possible —
+// otherwise the 40px rings would overlap in a 7-column, no-scroll week.
+const GUTTER_WIDTH = 24;
 const PADDING_TOP = 20;
 const PADDING_BOTTOM = 4;
-const BAR_GAP = 3;
 const PERIOD_LABEL_HEIGHT = 18;
+const RING_SIZE = 36;
 
 type Bar = {
   colX: number;
-  burnedX: number;
-  eatenX: number;
-  burnedY: number;
-  eatenY: number;
-  burnedH: number;
-  eatenH: number;
+  barX: number;
+  barY: number;
+  barH: number;
   barWidth: number;
   delta: number | null;
-  /** The delta cap: an extension of whichever bar (burned or eaten) is
-   * shorter, reaching up to match the taller one — deficit caps the eaten
-   * bar, surplus caps the burned bar. Null once delta is 0/negligible. */
-  deltaCap: { x: number; y: number; h: number } | null;
   topY: number;
 };
 
 function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
   if (plotWidth <= 0 || days.length === 0) return { bars: [] as Bar[], yTicks: [] as { y: number; label: string }[] };
 
-  const values = days.flatMap((d) => [d.burnedKcal, d.hasHappened ? d.eatenKcal : 0]);
-  const max = Math.max(...values, 1);
+  const deltas = days.map((d) => (d.hasHappened ? d.burnedKcal - d.eatenKcal : null));
+  const max = Math.max(...deltas.filter((d): d is number => d != null).map((d) => Math.abs(d)), 1);
 
   const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
   const colWidth = plotWidth / days.length;
-  const barWidth = Math.max(6, Math.min(14, colWidth * 0.3));
+  const barWidth = Math.max(10, Math.min(22, colWidth * 0.5));
 
   const bars: Bar[] = days.map((day, i) => {
     const colX = i * colWidth + colWidth / 2;
-    const burnedH = (day.burnedKcal / max) * plotHeight;
-    const eatenH = day.hasHappened ? (day.eatenKcal / max) * plotHeight : 0;
-    const delta = day.hasHappened ? day.burnedKcal - day.eatenKcal : null;
-
-    const burnedX = colX - barWidth - BAR_GAP / 2;
-    const eatenX = colX + BAR_GAP / 2;
-    const burnedY = PADDING_TOP + plotHeight - burnedH;
-    const eatenY = PADDING_TOP + plotHeight - eatenH;
-
-    let deltaCap: Bar['deltaCap'] = null;
-    if (delta != null && Math.abs(delta) > 0.5) {
-      deltaCap =
-        delta >= 0
-          ? { x: eatenX, y: burnedY, h: eatenY - burnedY } // deficit: caps the (shorter) eaten bar up to the burned bar's height
-          : { x: burnedX, y: eatenY, h: burnedY - eatenY }; // surplus: caps the (shorter) burned bar up to the eaten bar's height
-    }
-
+    const delta = deltas[i];
+    const barH = delta != null ? (Math.abs(delta) / max) * plotHeight : 0;
+    const barY = PADDING_TOP + plotHeight - barH;
     return {
       colX,
-      burnedX,
-      eatenX,
-      burnedY,
-      eatenY,
-      burnedH,
-      eatenH,
+      barX: colX - barWidth / 2,
+      barY,
+      barH,
       barWidth,
       delta,
-      deltaCap,
-      topY: PADDING_TOP + plotHeight - Math.max(burnedH, eatenH, 1),
+      topY: PADDING_TOP + plotHeight - Math.max(barH, 1),
     };
   });
 
@@ -115,17 +91,12 @@ function buildBars(days: WeeklyBurnDay[], plotWidth: number, height: number) {
 }
 
 /** A week-at-a-glance card, always showing Monday-Sunday of the current
- * week (no scrolling): burned/eaten bars per day, with the resulting
- * delta drawn as a colored cap stacked on top of whichever of the two is
- * shorter — capping the eaten bar (deficit color) when it was a deficit
- * day, or the burned bar (surplus color) when it was a surplus — labeled
- * with its kcal value. A concentric-ring badge below each day summarizes
- * that day's training/diet/steps. Days that haven't happened yet show
- * only the (baseline) burn bar. */
+ * week (no scrolling): one bar per day for that day's calorie
+ * deficit/surplus (fuchsia/blue), labeled with its kcal value, with a
+ * concentric-ring badge below each day summarizing that day's
+ * training/diet/steps. Days that haven't happened yet show no bar. */
 export function WeeklyBurnChart({
   days,
-  burnedColor,
-  eatenColor,
   surplusColor,
   deficitColor,
   trackColor,
@@ -170,32 +141,21 @@ export function WeeklyBurnChart({
             <View style={{ width: plotWidth }}>
               <View style={{ width: plotWidth, height }}>
                 <Svg width={plotWidth} height={height}>
-                  {bars.map((bar, i) => (
-                    <Rect key={`burned-${i}`} x={bar.burnedX} y={bar.burnedY} width={bar.barWidth} height={Math.max(bar.burnedH, 1)} rx={2} fill={burnedColor} />
-                  ))}
                   {bars.map((bar, i) =>
-                    days[i].hasHappened ? (
-                      <Rect key={`eaten-${i}`} x={bar.eatenX} y={bar.eatenY} width={bar.barWidth} height={Math.max(bar.eatenH, 1)} rx={2} fill={eatenColor} />
-                    ) : null
-                  )}
-                  {bars.map((bar, i) =>
-                    bar.deltaCap ? (
+                    bar.delta != null ? (
                       <Rect
-                        key={`delta-${i}`}
-                        x={bar.deltaCap.x}
-                        y={bar.deltaCap.y}
+                        key={`bar-${i}`}
+                        x={bar.barX}
+                        y={bar.barY}
                         width={bar.barWidth}
-                        height={bar.deltaCap.h}
-                        rx={2}
-                        fill={(bar.delta ?? 0) >= 0 ? deficitColor : surplusColor}
+                        height={Math.max(bar.barH, 1)}
+                        rx={3}
+                        fill={bar.delta >= 0 ? deficitColor : surplusColor}
                       />
                     ) : null
                   )}
                 </Svg>
 
-                {/* Value of the delta cap — the only bar that gets a
-                    number, since it's the one the card is meant to draw
-                    the eye to. */}
                 {bars.map((bar, i) =>
                   bar.delta != null ? (
                     <Text
@@ -240,9 +200,9 @@ export function WeeklyBurnChart({
                         {day.label}
                       </ThemedText>
                     )}
-                    <ProgressRing size={40} strokeWidth={4} progress={day.rings.training} color={trainingColor} trackColor={trackColor}>
-                      <ProgressRing size={29} strokeWidth={3} progress={day.rings.diet} color={dietColor} trackColor={trackColor}>
-                        <ProgressRing size={18} strokeWidth={2.5} progress={day.rings.steps} color={stepsColor} trackColor={trackColor} />
+                    <ProgressRing size={RING_SIZE} strokeWidth={4} progress={day.rings.training} color={trainingColor} trackColor={trackColor}>
+                      <ProgressRing size={RING_SIZE - 10} strokeWidth={3} progress={day.rings.diet} color={dietColor} trackColor={trackColor}>
+                        <ProgressRing size={RING_SIZE - 19} strokeWidth={2.5} progress={day.rings.steps} color={stepsColor} trackColor={trackColor} />
                       </ProgressRing>
                     </ProgressRing>
                   </View>
@@ -259,8 +219,6 @@ export function WeeklyBurnChart({
 
           {/* Legend, below the period caption */}
           <View style={styles.legendRow}>
-            <LegendItem color={burnedColor} label="Bruciate" />
-            <LegendItem color={eatenColor} label="Assunte" />
             <LegendItem color={deficitColor} label="Deficit" />
             <LegendItem color={surplusColor} label="Surplus" />
           </View>
