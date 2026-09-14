@@ -90,17 +90,22 @@ function TabButton({ label, icon, isFocused, ...props }: TabTriggerSlotProps & {
     focus.value = withSpring(isFocused ? 1 : 0, SpringSnappy);
   }, [isFocused, focus]);
 
-  const pillStyle = useAnimatedStyle(() => ({
+  // The selected tab gets its own little "Liquid Glass" lens — a GlassSurface
+  // bubble noticeably bigger than the icon it sits behind, popping in with a
+  // spring — rather than a flat tinted rectangle.
+  const lensStyle = useAnimatedStyle(() => ({
     opacity: focus.value,
-    transform: [{ scale: 0.7 + focus.value * 0.3 }],
+    transform: [{ scale: 0.55 + focus.value * 0.45 }],
   }));
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + focus.value * 0.16 }, { translateY: focus.value * -1.5 }],
+    transform: [{ scale: 1 + focus.value * 0.2 }, { translateY: focus.value * -2 }],
   }));
 
   return (
     <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
-      <Animated.View style={[styles.focusPill, { backgroundColor: theme.accentSoft }, pillStyle]} />
+      <Animated.View style={[styles.focusLensWrap, lensStyle]} pointerEvents="none">
+        <GlassSurface level="overlay" radius={Radius.pill} style={styles.focusLens} />
+      </Animated.View>
       <Animated.View style={iconStyle}>
         <Icon name={icon} size={19} color={color} />
       </Animated.View>
@@ -143,13 +148,15 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
-  focusPill: {
+  focusLensWrap: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 6,
-    right: 6,
-    borderRadius: Radius.medium,
+    top: -Spacing.one,
+    bottom: -Spacing.one,
+    left: 2,
+    right: 2,
+  },
+  focusLens: {
+    flex: 1,
   },
   tabLabel: {
     fontSize: 10,
