@@ -112,7 +112,7 @@ function FloatingTabBar({
       <View style={styles.row}>
         <GlassSurface
           level="overlay"
-          intensity={36}
+          intensity={16}
           radius={Radius.xlarge}
           style={styles.bar}
           onLayout={(e) => {
