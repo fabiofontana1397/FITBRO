@@ -1,34 +1,16 @@
 import * as Print from 'expo-print';
-import { Platform } from 'react-native';
 
 import { findQuestion, labelFor } from '@/lib/questionnaire/schema';
 
 import type { DietPlan } from './types';
 
+// Native only — expo-print's `html` param works correctly here. The web
+// build resolves to pdf-export.web.ts instead (a real client-side PDF via
+// jsPDF), since expo-print's web shim ignores `html` entirely and just
+// calls window.print() on the live app.
+
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/** expo-print's web shim ignores the `html` it's given entirely and just
- * calls `window.print()` on the current page — so on web a caller would
- * silently get a screenshot of the live app instead of the generated
- * document. Open the document in its own window and print *that* instead. */
-async function printHtmlDocument(html: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      throw new Error('Impossibile aprire la finestra di stampa (popup bloccato).');
-    }
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    // Give the new document a moment to lay out before invoking print —
-    // calling it synchronously can print a still-blank page in some browsers.
-    setTimeout(() => printWindow.print(), 250);
-    return;
-  }
-  await Print.printAsync({ html });
 }
 
 const BRAND_STYLE = `
@@ -116,7 +98,7 @@ export async function exportDietPlanPdf(plan: DietPlan, userName: string) {
     monthsHtml
   );
 
-  await printHtmlDocument(html);
+  await Print.printAsync({ html });
 }
 
 export type TrainingPlanPdfRow = {
@@ -211,5 +193,5 @@ export async function exportTrainingPlanPdf(input: TrainingPlanPdfInput) {
 </body>
 </html>`;
 
-  await printHtmlDocument(html);
+  await Print.printAsync({ html });
 }
