@@ -479,10 +479,14 @@ function OverviewLegendRow({ icon, color, label, value }: { icon: IconName; colo
     <View style={styles.legendRow}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
       <Icon name={icon} size={14} color={theme.textSecondary} />
-      <ThemedText type="caption" themeColor="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </ThemedText>
-      <ThemedText type="smallBold">{value}</ThemedText>
+      <View style={{ flex: 1 }}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {label}
+        </ThemedText>
+        <ThemedText type="smallBold" style={{ color }}>
+          {value}
+        </ThemedText>
+      </View>
     </View>
   );
 }
@@ -567,8 +571,9 @@ const styles = StyleSheet.create({
   },
   legendRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.two,
+    paddingTop: 2,
   },
   legendDot: {
     width: 8,
