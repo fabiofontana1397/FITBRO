@@ -14,11 +14,10 @@ import { Icon } from '@/components/ui/icon';
 import { InsightCard } from '@/components/ui/insight-card';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { StatTile } from '@/components/ui/stat-tile';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeightSeries, weightDateGranularity, type WeightRange } from '@/hooks/use-weight-series';
-import { deltaFromPrevious, latestSnapshot, percentChange, seriesOf } from '@/lib/mock/body';
+import { deltaFromPrevious, latestSnapshot } from '@/lib/mock/body';
 import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
 import { useBodyStore } from '@/store/body-store';
 import { useUserStore } from '@/store/user-store';
@@ -104,24 +103,6 @@ export default function BodyScreen() {
         />
       </GlassSurface>
 
-      <View style={styles.statsRow}>
-        <StatTile
-          label="Massa grassa"
-          value={latest.bodyFatPct.toFixed(1)}
-          unit="%"
-          trend={percentChange(entries, 'bodyFatPct')}
-          trendGoodDirection="down"
-          sparkline={seriesOf(entries, 'bodyFatPct')}
-        />
-        <StatTile
-          label="Massa muscolare"
-          value={latest.muscleMassKg.toFixed(1)}
-          unit="kg"
-          trend={percentChange(entries, 'muscleMassKg')}
-          sparkline={seriesOf(entries, 'muscleMassKg')}
-        />
-      </View>
-
       <View>
         <SectionHeader title="Misure" />
         <View style={{ gap: Spacing.three }}>
@@ -200,10 +181,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
   },
   measureRow: {
     flexDirection: 'row',
