@@ -190,7 +190,7 @@ export function GoalTrendChart({ points, target, dateGranularity, width, height 
     <View style={{ width: width ?? '100%', height: height + PERIOD_LABEL_HEIGHT }} onLayout={onLayout}>
       {containerWidth > 0 ? (
         <>
-          <View style={{ flexDirection: 'row', height }}>
+          <View style={{ flexDirection: 'row', height, position: 'relative' }}>
             {/* Fixed y-axis gutter, stays put while the plot scrolls under it */}
             <View style={{ width: GUTTER_WIDTH, height }}>
               {yTicks.map((tick, i) => (
@@ -246,7 +246,7 @@ export function GoalTrendChart({ points, target, dateGranularity, width, height 
                   ))}
 
                   {/* Target reference line */}
-                  <Line x1={0} y1={targetY} x2={plotWidth} y2={targetY} stroke={targetColor} strokeWidth={1.5} strokeDasharray="5 5" />
+                  <Line x1={0} y1={targetY} x2={plotWidth} y2={targetY} stroke={targetColor} strokeWidth={1.5} />
 
                   {segments.map((seg, i) => (seg.area ? <Path key={`area${i}`} d={seg.area} fill="url(#goalTrendFill)" /> : null))}
                   {segments.map((seg, i) => (
@@ -256,20 +256,6 @@ export function GoalTrendChart({ points, target, dateGranularity, width, height 
                     <Circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? 4.5 : 3} fill={color} />
                   ))}
                 </Svg>
-
-                {/* Target label — pinned near the left so it's visible without
-                    scrolling, rather than at the far end of a wide plot. */}
-                <Text
-                  style={{
-                    position: 'absolute',
-                    left: INSET_LEFT,
-                    top: Math.max(targetY - 16, 0),
-                    fontSize: 10,
-                    fontWeight: '700',
-                    color: targetColor,
-                  }}>
-                  Obiettivo {target}kg
-                </Text>
 
                 {/* X-axis labels — always shown, even for slots with no data yet */}
                 {xTicks.map((tick, i) => (
@@ -308,6 +294,21 @@ export function GoalTrendChart({ points, target, dateGranularity, width, height 
                 ))}
               </View>
             </ScrollView>
+
+            {/* Target label — fixed at the right edge of the visible plot
+                (not the scrollable content), so it stays on screen no
+                matter how far the chart is scrolled. */}
+            <Text
+              style={{
+                position: 'absolute',
+                right: 4,
+                top: Math.max(targetY - 16, 0),
+                fontSize: 10,
+                fontWeight: '700',
+                color: targetColor,
+              }}>
+              Obiettivo {target}kg
+            </Text>
           </View>
 
           {/* Period caption — tracks whichever slots are currently scrolled
