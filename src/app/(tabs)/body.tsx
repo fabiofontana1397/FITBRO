@@ -131,25 +131,36 @@ export default function BodyScreen() {
       <View>
         <SectionHeader title="Misure" />
         <View style={{ gap: Spacing.three }}>
-          {MEASUREMENTS.map((m) => (
-            <GlassSurface key={m.zone} level="card" radius={Radius.large}>
-              <View style={styles.measureRow}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <ThemedText type="small">{m.label}</ThemedText>
-                  <ThemedText type="smallBold">{latest[m.zone]} cm</ThemedText>
+          {MEASUREMENTS.map((m) => {
+            const series = seriesOf(entries, m.zone);
+            // A single logged value has no line to draw — the sparkline
+            // (and the "andamento" popup it opens) only earns its place
+            // once there are at least two measurements to connect.
+            const hasTrend = series.length >= 2;
+            return (
+              <GlassSurface key={m.zone} level="card" radius={Radius.large}>
+                <View style={styles.measureRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <ThemedText type="small">{m.label}</ThemedText>
+                    <ThemedText type="smallBold">{latest[m.zone]} cm</ThemedText>
+                  </View>
+                  {hasTrend ? (
+                    <Pressable onPress={() => setTrendMeasurement(m)} hitSlop={8}>
+                      <TrendChart data={series} width={56} height={28} color={theme.accent} />
+                    </Pressable>
+                  ) : (
+                    <View style={{ width: 56, height: 28 }} />
+                  )}
+                  <Pressable onPress={() => setAddMeasurementZone(m)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.accentSoft }]}>
+                    <Icon name="plus" size={16} color={theme.accent} />
+                  </Pressable>
+                  <Pressable onPress={() => setInfoZone(m.zone)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.backgroundElement }]}>
+                    <Icon name="info" size={16} color={theme.textSecondary} />
+                  </Pressable>
                 </View>
-                <Pressable onPress={() => setTrendMeasurement(m)} hitSlop={8}>
-                  <TrendChart data={seriesOf(entries, m.zone)} width={56} height={28} color={theme.accent} />
-                </Pressable>
-                <Pressable onPress={() => setAddMeasurementZone(m)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.accentSoft }]}>
-                  <Icon name="plus" size={16} color={theme.accent} />
-                </Pressable>
-                <Pressable onPress={() => setInfoZone(m.zone)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.backgroundElement }]}>
-                  <Icon name="info" size={16} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-            </GlassSurface>
-          ))}
+              </GlassSurface>
+            );
+          })}
         </View>
       </View>
 
