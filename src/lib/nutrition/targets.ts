@@ -126,3 +126,23 @@ export function estimateDailyBurnedKcal(input: {
   const multiplier = jobMultiplier + (input.trainedThisDay ? TRAINING_DAY_BURN_BUMP : 0);
   return Math.round(bmr * multiplier);
 }
+
+/** Just the extra kcal a completed workout day adds over baseline — the
+ * same bump estimateDailyBurnedKcal folds in, exposed on its own so a UI
+ * can show "calories from training" apart from basal/job burn. */
+export function estimateTrainingBonusKcal(input: { sex: Sex; ageRange: string; heightCm: number; weightKg: number; trainedThisDay: boolean }): number {
+  if (!input.trainedThisDay) return 0;
+  const age = AGE_RANGE_MIDPOINT[input.ageRange] ?? 30;
+  const bmr = bmrMifflinStJeor(input.sex, input.weightKg, input.heightCm, age);
+  return Math.round(bmr * TRAINING_DAY_BURN_BUMP);
+}
+
+// A commonly used ballpark for walking: roughly 0.04 kcal per step for a
+// 70kg adult (so ~10,000 steps ≈ 350-400 kcal), scaled linearly by weight
+// since heavier bodies burn more per step.
+const KCAL_PER_STEP_AT_70KG = 0.04;
+
+/** Rough estimate of calories burned from a day's step count. */
+export function estimateStepsKcal(steps: number, weightKg: number): number {
+  return Math.round(steps * KCAL_PER_STEP_AT_70KG * (weightKg / 70));
+}

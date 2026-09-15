@@ -19,7 +19,7 @@ import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
 import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekdayShort } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
-import { estimateDailyBurnedKcal } from '@/lib/nutrition/targets';
+import { estimateDailyBurnedKcal, estimateStepsKcal, estimateTrainingBonusKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
 import { currentMonthIndex } from '@/lib/planning/plan-progress';
 import type { TrainingExerciseEntry } from '@/lib/planning/types';
@@ -63,6 +63,11 @@ export default function HomeScreen() {
 
   const workoutExercises = todayPlanDay?.type === 'workout' ? (todayPlanDay.exercises ?? []) : [];
   const completedCount = workoutExercises.filter((ex) => isExerciseCompleted(completedExercises, ex.id, today)).length;
+  // Rest/cardio days (or no plan at all) have no checkboxes to tick, so the
+  // ring simply reads as "done" rather than stuck at some arbitrary partial
+  // value.
+  const trainingProgress =
+    todayPlanDay?.type === 'workout' ? (workoutExercises.length > 0 ? completedCount / workoutExercises.length : 1) : 1;
 
   // The generated diet plan's OWN calorie/macro targets for the active
   // month (they can differ month to month) take priority over the static
@@ -73,6 +78,9 @@ export default function HomeScreen() {
 
   const todaysTotals = sumMacros(nutritionEntries.filter((e) => e.date === today));
   const dietProgress = calorieTarget > 0 ? Math.min(todaysTotals.kcal / calorieTarget, 1) : 0;
+
+  const todaysSteps = stepsHistory[stepsHistory.length - 1]?.steps ?? 0;
+  const stepsProgress = Math.min(todaysSteps / dailyStepsTarget, 1);
 
   const planIcon: IconName =
     !todayPlanDay || todayPlanDay.type === 'workout' ? 'training' : todayPlanDay.type === 'cardio' ? 'running' : 'moon';
@@ -94,15 +102,14 @@ export default function HomeScreen() {
   // day was actually completed — matching the same rule weekDays uses below.
   const todayTrainedThisDay =
     todayPlanDay?.type === 'workout' && workoutExercises.length > 0 && completedCount === workoutExercises.length;
-  const todayBurnedKcal = estimateDailyBurnedKcal({
+  const todayTrainingKcal = estimateTrainingBonusKcal({
     sex: currentUser.sex,
     ageRange: currentUser.ageRange,
     heightCm: currentUser.heightCm,
     weightKg: latestBody.weightKg,
-    jobActivity: onboardingAnswers.jobActivity as string | undefined,
     trainedThisDay: todayTrainedThisDay,
   });
-  const burnedProgress = calorieTarget > 0 ? Math.min(todayBurnedKcal / calorieTarget, 1) : 0;
+  const todayStepsKcal = estimateStepsKcal(todaysSteps, latestBody.weightKg);
 
   // Week/month/year switches which fixed set of axis slots the chart shows
   // — days of this week, days of this month, months of this year — each
@@ -296,13 +303,16 @@ export default function HomeScreen() {
         <SectionHeader title="Riepilogo di oggi" />
         <GlassSurface level="card" radius={Radius.large} style={styles.overviewCard}>
           <View style={styles.ringsStack}>
-            <ProgressRing size={128} strokeWidth={12} progress={burnedProgress} color={theme.accent} trackColor={theme.backgroundElement}>
-              <ProgressRing size={92} strokeWidth={10} progress={dietProgress} color={theme.success} trackColor={theme.backgroundElement} />
+            <ProgressRing size={128} strokeWidth={12} progress={trainingProgress} color={theme.accent} trackColor={theme.backgroundElement}>
+              <ProgressRing size={92} strokeWidth={10} progress={dietProgress} color={theme.success} trackColor={theme.backgroundElement}>
+                <ProgressRing size={58} strokeWidth={8} progress={stepsProgress} color={theme.warning} trackColor={theme.backgroundElement} />
+              </ProgressRing>
             </ProgressRing>
           </View>
           <View style={styles.legendColumn}>
-            <OverviewLegendRow icon="training" color={theme.accent} label="Bruciate" value={`${Math.round(todayBurnedKcal)} kcal`} />
-            <OverviewLegendRow icon="nutrition" color={theme.success} label="Assunte" value={`${Math.round(todaysTotals.kcal)} kcal`} />
+            <OverviewLegendRow icon="training" color={theme.accent} label="Allenamento" value={`-${Math.round(todayTrainingKcal)} kcal`} />
+            <OverviewLegendRow icon="nutrition" color={theme.success} label="Dieta" value={`+${Math.round(todaysTotals.kcal)} kcal`} />
+            <OverviewLegendRow icon="footsteps" color={theme.warning} label="Passi" value={`-${Math.round(todayStepsKcal)} kcal`} />
           </View>
         </GlassSurface>
 
@@ -324,10 +334,11 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1, alignItems: 'flex-end' }}>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Bruciate questa settimana
+                  Settimana
                 </ThemedText>
-                <ThemedText type="subtitle">
-                  {Math.round(weekBurnedSoFar)}/{Math.round(weeklyProgrammedKcal)} kcal
+                <ThemedText type="smallBold">Bruciate {Math.round(weekBurnedSoFar)} kcal</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Da bruciare {Math.round(Math.max(weeklyProgrammedKcal - weekBurnedSoFar, 0))} kcal
                 </ThemedText>
               </View>
             </View>
@@ -372,6 +383,13 @@ export default function HomeScreen() {
             </View>
             <Icon name="chevronRight" size={18} color={theme.textTertiary} />
           </Pressable>
+          {workoutExercises.length > 0 ? (
+            <View style={styles.exerciseListRow}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {workoutExercises.map((ex) => ex.name).join(' · ')}
+              </ThemedText>
+            </View>
+          ) : null}
         </GlassSurface>
       </View>
 
@@ -504,6 +522,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
     padding: Spacing.three,
+  },
+  exerciseListRow: {
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.three,
   },
   sportBadge: {
     width: 44,
