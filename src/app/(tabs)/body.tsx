@@ -132,7 +132,12 @@ export default function BodyScreen() {
         <SectionHeader title="Misure" />
         <View style={{ gap: Spacing.three }}>
           {MEASUREMENTS.map((m) => {
-            const series = seriesOf(entries, m.zone);
+            // Entries logged before this zone existed (or the user simply
+            // hasn't recorded it yet) carry no value for it — filter those
+            // out rather than let a missing number reach the chart as NaN.
+            const series = seriesOf(entries, m.zone).filter((v) => Number.isFinite(v));
+            const latestValue = latest[m.zone];
+            const hasValue = Number.isFinite(latestValue);
             // A single logged value has no line to draw — the sparkline
             // (and the "andamento" popup it opens) only earns its place
             // once there are at least two measurements to connect.
@@ -142,7 +147,7 @@ export default function BodyScreen() {
                 <View style={styles.measureRow}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <ThemedText type="small">{m.label}</ThemedText>
-                    <ThemedText type="smallBold">{latest[m.zone]} cm</ThemedText>
+                    <ThemedText type="smallBold">{hasValue ? `${latestValue} cm` : 'Non ancora misurato'}</ThemedText>
                   </View>
                   {hasTrend ? (
                     <Pressable onPress={() => setTrendMeasurement(m)} hitSlop={8}>
@@ -199,7 +204,7 @@ export default function BodyScreen() {
                   <Pressable key={photo.id} onPress={() => setDetailPhoto(photo)}>
                     <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
                     <ThemedText type="caption" themeColor="textSecondary" style={styles.photoThumbLabel} numberOfLines={1}>
-                      {POSE_LABELS[photo.pose]}
+                      {POSE_LABELS[photo.pose] ?? 'Foto'}
                     </ThemedText>
                   </Pressable>
                 ))}
@@ -237,7 +242,7 @@ export default function BodyScreen() {
       <QuickMeasurementSheet
         visible={addMeasurementZone != null}
         label={addMeasurementZone?.label ?? ''}
-        currentValueCm={addMeasurementZone ? Number(latest[addMeasurementZone.zone]) : 0}
+        currentValueCm={addMeasurementZone && Number.isFinite(latest[addMeasurementZone.zone]) ? Number(latest[addMeasurementZone.zone]) : 0}
         onClose={() => setAddMeasurementZone(null)}
         onSave={(valueCm) => {
           if (addMeasurementZone) addMeasurement({ [addMeasurementZone.zone]: valueCm });

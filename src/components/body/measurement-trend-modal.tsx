@@ -65,7 +65,12 @@ export function MeasurementTrendModal({ zone, label, entries, color, onClose }: 
   const theme = useTheme();
   if (!zone) return null;
 
-  const values = entries.map((e) => Number(e[zone]));
+  // Entries logged before this zone existed (or simply never recorded for
+  // it) carry no value — drop those rather than let a missing number reach
+  // the chart as NaN. `entries` is filtered in lockstep so date labels
+  // still line up with `values` by index.
+  const entriesWithValue = entries.filter((e) => Number.isFinite(Number(e[zone])));
+  const values = entriesWithValue.map((e) => Number(e[zone]));
   const hasEnoughData = values.length >= 2;
   const chart = hasEnoughData ? buildChart(values) : null;
 
@@ -120,7 +125,7 @@ export function MeasurementTrendModal({ zone, label, entries, color, onClose }: 
                       color: theme.textTertiary,
                       textAlign: 'center',
                     }}>
-                    {formatDayMonth(entries[i].date)}
+                    {formatDayMonth(entriesWithValue[i].date)}
                   </Text>
                 ))}
 

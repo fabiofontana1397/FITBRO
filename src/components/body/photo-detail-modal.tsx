@@ -33,7 +33,7 @@ export function PhotoDetailModal({ photo, allPhotos, entries, onClose }: PhotoDe
           <GlassSurface level="overlay" radius={Radius.xlarge} style={styles.card}>
             <View style={styles.header}>
               <View>
-                <ThemedText type="subtitle">{POSE_LABELS[photo.pose]}</ThemedText>
+                <ThemedText type="subtitle">{POSE_LABELS[photo.pose] ?? 'Foto'}</ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
                   {formatFullDay(photo.date)}
                 </ThemedText>
