@@ -205,14 +205,8 @@ export default function HomeScreen() {
 
   const todayBurn = weekDays.find((d) => d.isToday);
   const weekBurnedSoFar = weekDays.filter((d) => d.hasHappened).reduce((sum, d) => sum + d.burnedKcal, 0);
-  const weekEatenSoFar = weekDays.filter((d) => d.hasHappened).reduce((sum, d) => sum + d.eatenKcal, 0);
-  const weekDeficit = weekBurnedSoFar - weekEatenSoFar;
+  const weeklyProgrammedKcal = calorieTarget * weekDays.length;
   const todayDeficit = todayBurn ? todayBurn.burnedKcal - todayBurn.eatenKcal : 0;
-  // What eating exactly the plan's daily calorie target across every
-  // planned day this week would add up to — negative for a deficit plan,
-  // positive for a surplus one. Uses each day's own estimated burn (higher
-  // on trained days) rather than a flat TDEE.
-  const weeklyDeficitGoal = weekDays.reduce((sum, d) => sum + (calorieTarget - d.burnedKcal), 0);
 
   // Every exercise appearing anywhere in the plan (same de-duplication
   // training-progress.tsx uses), so "recent" lifts aren't limited to today.
@@ -330,15 +324,11 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1, alignItems: 'flex-end' }}>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Questa settimana
+                  Bruciate questa settimana
                 </ThemedText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Icon name={weekDeficit >= 0 ? 'trendDown' : 'trendUp'} size={14} color={weekDeficit >= 0 ? theme.success : theme.danger} />
-                  <ThemedText type="subtitle" style={{ color: weekDeficit >= 0 ? theme.success : theme.danger }}>
-                    {weekDeficit >= 0 ? '-' : '+'}
-                    {Math.abs(Math.round(weekDeficit))} kcal
-                  </ThemedText>
-                </View>
+                <ThemedText type="subtitle">
+                  {Math.round(weekBurnedSoFar)}/{Math.round(weeklyProgrammedKcal)} kcal
+                </ThemedText>
               </View>
             </View>
           </View>
@@ -356,8 +346,6 @@ export default function HomeScreen() {
             eatenColor={theme.success}
             deficitColor={theme.calorieDeficit}
             surplusColor={theme.calorieSurplus}
-            weeklyDeficitGoal={weeklyDeficitGoal}
-            goalColor={theme.textSecondary}
             trackColor={theme.backgroundElement}
             axisColor={theme.textTertiary}
             todayBadgeColor={theme.accent}
