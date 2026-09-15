@@ -9,7 +9,7 @@ import { PhotoDetailModal } from '@/components/body/photo-detail-modal';
 import { PosePickerSheet } from '@/components/body/pose-picker-sheet';
 import { QuickMeasurementSheet } from '@/components/body/quick-measurement-sheet';
 import { QuickWeightSheet } from '@/components/body/quick-weight-sheet';
-import type { MeasurementZone } from '@/components/body/body-silhouette';
+import { BodySilhouette, type MeasurementZone } from '@/components/body/body-silhouette';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
@@ -145,6 +145,7 @@ export default function BodyScreen() {
             return (
               <GlassSurface key={m.zone} level="card" radius={Radius.large}>
                 <View style={styles.measureRow}>
+                  <BodySilhouette zone={m.zone} color={theme.accent} outlineColor={theme.textTertiary} width={22} height={34} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <ThemedText type="small">{m.label}</ThemedText>
                     <ThemedText type="smallBold">{hasValue ? `${latestValue} cm` : 'Non ancora misurato'}</ThemedText>
