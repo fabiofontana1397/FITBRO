@@ -23,7 +23,7 @@ function formatItem(item: PlanMealItem): string {
 const BRAND_STYLE = `
   .brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
   .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; color: #16171b; }
-  .brand-mark .accent { color: #FF6A00; }
+  .brand-mark .accent { color: #FF7A00; }
   .brand-tagline { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
 `;
 

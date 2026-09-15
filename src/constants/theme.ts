@@ -10,17 +10,17 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// A more saturated, almost-fluorescent orange than the original — same
-// ramp shape (a light tint through to a dark pressed-state shade), just
-// pushed toward pure vivid orange (#FF6A00) instead of the more muted,
-// slightly red-leaning #FF5A1F.
+// Pushed further still into genuinely phosphorescent territory — same
+// ramp shape, base shifted from #FF6A00 to a hotter, higher-luminance
+// #FF7A00 (more green in the mix reads as "glowing" the way the neon
+// success/warning colors below do, without tipping over into amber).
 const orange = {
-  50: '#FFF0E0',
-  100: '#FFD9B0',
-  300: '#FFA24D',
-  500: '#FF6A00',
-  600: '#E85F00',
-  700: '#C24F00',
+  50: '#FFF2E0',
+  100: '#FFDDB0',
+  300: '#FFB166',
+  500: '#FF7A00',
+  600: '#F06A00',
+  700: '#C25A00',
 };
 
 const neutral = {
@@ -87,7 +87,7 @@ export const Colors = {
     textTertiary: neutral[500],
     accent: orange[500],
     accentPressed: orange[300],
-    accentSoft: 'rgba(255,106,0,0.16)',
+    accentSoft: 'rgba(255,122,0,0.16)',
     onAccent: neutral[0],
     // True neon-marker green/yellow — dark is the hero mode, and these read
     // as genuinely bright against near-black the way a highlighter does

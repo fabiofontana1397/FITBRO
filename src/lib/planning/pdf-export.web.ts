@@ -16,7 +16,7 @@ import type { DietDayPlan, PlanMealItem } from './types';
 // with jsPDF sidesteps that entirely and downloads an actual .pdf file,
 // which is also far more reliable on mobile browsers than a print dialog.
 
-const ORANGE: [number, number, number] = [255, 90, 31];
+const ORANGE: [number, number, number] = [255, 122, 0];
 const INK: [number, number, number] = [22, 23, 27];
 const MUTED: [number, number, number] = [102, 102, 102];
 const BODY: [number, number, number] = [51, 51, 51];

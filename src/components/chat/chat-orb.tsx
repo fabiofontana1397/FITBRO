@@ -67,7 +67,7 @@ export function ChatOrb({ size }: { size: number }) {
   }));
 
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF6A00' }}>
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#FF7A00' }}>
       <Animated.View style={[styles.layer, tiltStyle]}>
         {BLOBS.map((blob, i) => (
           <BlobLayer key={i} blob={blob} size={size} index={i} />
