@@ -6,11 +6,28 @@ import { daysAgoISO } from '@/lib/mock/dates';
 import type { BodyMetricSnapshot } from '@/lib/mock/types';
 import { appJsonStorage } from '@/store/storage';
 
+// The fixed shot list a progress-photo session should cover — see the
+// instructions card on the Corpo screen. Front/back get a relaxed AND a
+// flexed shot; sides are relaxed only.
+export type BodyPhotoPose = 'frontRelaxed' | 'sideRightRelaxed' | 'sideLeftRelaxed' | 'backRelaxed' | 'frontFlexed' | 'backFlexed';
+
 export type BodyPhoto = {
   id: string;
   uri: string;
   date: string;
+  pose: BodyPhotoPose;
 };
+
+export const POSE_LABELS: Record<BodyPhotoPose, string> = {
+  frontRelaxed: 'Frontale',
+  sideRightRelaxed: 'Laterale dx',
+  sideLeftRelaxed: 'Laterale sx',
+  backRelaxed: 'Posteriore',
+  frontFlexed: 'Frontale flesso',
+  backFlexed: 'Posteriore flesso',
+};
+
+export const POSE_ORDER: BodyPhotoPose[] = ['frontRelaxed', 'sideRightRelaxed', 'sideLeftRelaxed', 'backRelaxed', 'frontFlexed', 'backFlexed'];
 
 type BodyState = {
   entries: BodyMetricSnapshot[];
@@ -18,7 +35,7 @@ type BodyState = {
   addWeightEntry: (weightKg: number, date?: string) => void;
   resetStartingWeight: (weightKg: number, date?: string) => void;
   addMeasurement: (partial: Partial<Omit<BodyMetricSnapshot, 'date'>>, date?: string) => void;
-  addPhoto: (uri: string, date?: string) => void;
+  addPhoto: (uri: string, pose: BodyPhotoPose, date?: string) => void;
   removePhoto: (id: string) => void;
 };
 
@@ -58,9 +75,9 @@ export const useBodyStore = create<BodyState>()(
           }
           return { entries: [...state.entries, { ...last, ...partial, date }] };
         }),
-      addPhoto: (uri, date = daysAgoISO(0)) =>
+      addPhoto: (uri, pose, date = daysAgoISO(0)) =>
         set((state) => ({
-          photos: [...state.photos, { id: `photo-${Date.now()}`, uri, date }],
+          photos: [...state.photos, { id: `photo-${Date.now()}`, uri, date, pose }],
         })),
       removePhoto: (id) => set((state) => ({ photos: state.photos.filter((p) => p.id !== id) })),
     }),

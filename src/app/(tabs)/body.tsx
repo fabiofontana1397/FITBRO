@@ -1,10 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { MeasurementInfoModal } from '@/components/body/measurement-info-modal';
 import { MeasurementTrendModal } from '@/components/body/measurement-trend-modal';
+import { PhotoDetailModal } from '@/components/body/photo-detail-modal';
+import { PosePickerSheet } from '@/components/body/pose-picker-sheet';
 import { QuickMeasurementSheet } from '@/components/body/quick-measurement-sheet';
 import { QuickWeightSheet } from '@/components/body/quick-weight-sheet';
 import type { MeasurementZone } from '@/components/body/body-silhouette';
@@ -20,8 +22,10 @@ import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeightSeries, weightDateGranularity, type WeightRange } from '@/hooks/use-weight-series';
+import { formatFullDay } from '@/lib/mock/dates';
 import { deltaFromPrevious, latestSnapshot, seriesOf } from '@/lib/mock/body';
 import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
+import { POSE_LABELS, type BodyPhoto, type BodyPhotoPose } from '@/store/body-store';
 import { useBodyStore } from '@/store/body-store';
 import { useUserStore } from '@/store/user-store';
 
@@ -48,6 +52,8 @@ export default function BodyScreen() {
   const [infoZone, setInfoZone] = useState<MeasurementZone | null>(null);
   const [trendMeasurement, setTrendMeasurement] = useState<{ zone: MeasurementZone; label: string } | null>(null);
   const [addMeasurementZone, setAddMeasurementZone] = useState<{ zone: MeasurementZone; label: string } | null>(null);
+  const [posePickerOpen, setPosePickerOpen] = useState(false);
+  const [detailPhoto, setDetailPhoto] = useState<BodyPhoto | null>(null);
   const [weightRange, setWeightRange] = useState<WeightRange>('settimana');
   const weightSeries = useWeightSeries(entries, weightRange);
 
@@ -56,7 +62,16 @@ export default function BodyScreen() {
   const toGoal = latest.weightKg - currentUser.targetWeightKg;
   const photoInsight = generatePhotoInsight(photos, entries);
 
-  const pickPhoto = async () => {
+  // Every photo taken on the same day grouped into its own box, most recent
+  // session first — a full pose set from one sitting reads as one unit
+  // instead of blending into a single long scroll.
+  const photosByDay = useMemo(() => {
+    const map = new Map<string, BodyPhoto[]>();
+    for (const p of photos) map.set(p.date, [...(map.get(p.date) ?? []), p]);
+    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
+  }, [photos]);
+
+  const pickPhoto = async (pose: BodyPhotoPose) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -66,7 +81,7 @@ export default function BodyScreen() {
       aspect: [3, 4],
     });
     if (!result.canceled && result.assets[0]) {
-      addPhoto(result.assets[0].uri);
+      addPhoto(result.assets[0].uri, pose);
     }
   };
 
@@ -138,19 +153,49 @@ export default function BodyScreen() {
         </View>
       </View>
 
-      <View>
+      <View style={{ gap: Spacing.three }}>
         <SectionHeader title="Foto progressi" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
-          {photos.map((photo) => (
-            <Image key={photo.id} source={{ uri: photo.uri }} style={styles.photoThumb} />
-          ))}
-          <Pressable onPress={pickPhoto} style={[styles.addPhotoTile, { borderColor: theme.border }]}>
-            <Icon name="camera" size={24} color={theme.textSecondary} />
-            <ThemedText type="caption" themeColor="textSecondary">
-              Aggiungi
-            </ThemedText>
-          </Pressable>
-        </ScrollView>
+
+        <InsightCard
+          icon="camera"
+          tone="neutral"
+          headline="Come scattare le foto"
+          body={
+            'Scegli un posto ben illuminato, con luce uniforme.\n' +
+            'Scatta 6 foto a corpo intero: frontale, laterale destro, laterale sinistro e posteriore rilassato, poi frontale e posteriore flettendo i muscoli.\n' +
+            'Sempre alla stessa ora — idealmente al mattino, a digiuno e dopo essere andato in bagno.\n' +
+            'Ripeti l’intera sequenza una volta al mese.'
+          }
+        />
+
+        <Pressable onPress={() => setPosePickerOpen(true)} style={[styles.addPhotoRow, { borderColor: theme.border }]}>
+          <Icon name="camera" size={20} color={theme.accent} />
+          <ThemedText type="smallBold" style={{ color: theme.accent }}>
+            Aggiungi foto
+          </ThemedText>
+        </Pressable>
+
+        {photosByDay.length === 0 ? (
+          <ThemedText type="caption" themeColor="textTertiary" style={{ textAlign: 'center' }}>
+            Non hai ancora scattato foto di progresso.
+          </ThemedText>
+        ) : (
+          photosByDay.map(([date, dayPhotos]) => (
+            <GlassSurface key={date} level="card" radius={Radius.large} style={styles.photoDayCard}>
+              <ThemedText type="smallBold">{formatFullDay(date)}</ThemedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
+                {dayPhotos.map((photo) => (
+                  <Pressable key={photo.id} onPress={() => setDetailPhoto(photo)}>
+                    <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
+                    <ThemedText type="caption" themeColor="textSecondary" style={styles.photoThumbLabel} numberOfLines={1}>
+                      {POSE_LABELS[photo.pose]}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </GlassSurface>
+          ))
+        )}
       </View>
 
       {photoInsight ? (
@@ -187,6 +232,15 @@ export default function BodyScreen() {
           if (addMeasurementZone) addMeasurement({ [addMeasurementZone.zone]: valueCm });
         }}
       />
+      <PosePickerSheet
+        visible={posePickerOpen}
+        onClose={() => setPosePickerOpen(false)}
+        onSelect={(pose) => {
+          setPosePickerOpen(false);
+          pickPhoto(pose);
+        }}
+      />
+      <PhotoDetailModal photo={detailPhoto} allPhotos={photos} entries={entries} onClose={() => setDetailPhoto(null)} />
     </ScreenScroll>
   );
 }
@@ -227,19 +281,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoDayCard: {
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
   photoThumb: {
     width: 84,
     height: 112,
     borderRadius: Radius.medium,
   },
-  addPhotoTile: {
+  photoThumbLabel: {
     width: 84,
-    height: 112,
-    borderRadius: Radius.medium,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  addPhotoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Spacing.two,
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.large,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
   },
 });
