@@ -22,9 +22,12 @@ export type BodyMetricSnapshot = {
   weightKg: number;
   bodyFatPct: number;
   muscleMassKg: number;
-  waistCm: number;
+  shouldersCm: number;
   chestCm: number;
+  bicepsCm: number;
+  waistCm: number;
   hipsCm: number;
+  thighCm: number;
   restingHeartRate: number;
   sleepHours: number;
 };

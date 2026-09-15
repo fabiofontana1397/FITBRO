@@ -77,9 +77,12 @@ export function seedOneMonthOfTestData() {
       weightKg: round1(trendWeight + jitter(0.25)),
       bodyFatPct: round1(22 - 5 * t + jitter(0.3)),
       muscleMassKg: round1(60 + 3 * t + jitter(0.2)),
-      waistCm: round1(92 - 8 * t + jitter(0.3)),
+      shouldersCm: round1(110 + 2 * t + jitter(0.2)),
       chestCm: round1(100 + 3 * t + jitter(0.2)),
+      bicepsCm: round1(32 + 2 * t + jitter(0.15)),
+      waistCm: round1(92 - 8 * t + jitter(0.3)),
       hipsCm: round1(100 - 3 * t + jitter(0.2)),
+      thighCm: round1(55 + 1.5 * t + jitter(0.2)),
       restingHeartRate: Math.round(64 - 6 * t + jitter(1)),
       sleepHours: round1(7 + jitter(0.6)),
     };

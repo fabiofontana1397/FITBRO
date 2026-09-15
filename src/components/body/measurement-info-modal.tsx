@@ -8,20 +8,35 @@ import { useTheme } from '@/hooks/use-theme';
 import { BodySilhouette, type MeasurementZone } from './body-silhouette';
 
 const COPY: Record<MeasurementZone, { title: string; instructions: string }> = {
-  waistCm: {
-    title: 'Vita',
+  shouldersCm: {
+    title: 'Spalle',
     instructions:
-      'Misura il punto più stretto della vita, solitamente circa 2 dita sopra l’ombelico. Tieni il metro parallelo al pavimento, senza stringere, e respira normalmente prima di leggere il valore.',
+      'Misura la circonferenza delle spalle passando il metro sopra i deltoidi, nel punto più largo, con le braccia rilassate lungo i fianchi.',
   },
   chestCm: {
     title: 'Petto',
     instructions:
       'Misura intorno al punto più sporgente del petto, passando il metro sotto le ascelle e mantenendolo parallelo al pavimento. Non trattenere il respiro.',
   },
+  bicepsCm: {
+    title: 'Bicipite',
+    instructions:
+      'Misura la circonferenza del braccio nel punto più largo del bicipite. Usa sempre la stessa modalità (rilassato o flesso) per confrontare le misure nel tempo.',
+  },
+  waistCm: {
+    title: 'Vita',
+    instructions:
+      'Misura il punto più stretto della vita, solitamente circa 2 dita sopra l’ombelico. Tieni il metro parallelo al pavimento, senza stringere, e respira normalmente prima di leggere il valore.',
+  },
   hipsCm: {
     title: 'Fianchi',
     instructions:
       'Misura intorno al punto più largo di fianchi e glutei, con i piedi uniti e il metro ben orizzontale.',
+  },
+  thighCm: {
+    title: 'Coscia',
+    instructions:
+      'Misura la circonferenza della coscia nel punto più largo, subito sotto il gluteo, con il peso distribuito su entrambe le gambe.',
   },
 };
 

@@ -1,11 +1,14 @@
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
-export type MeasurementZone = 'chestCm' | 'waistCm' | 'hipsCm';
+export type MeasurementZone = 'shouldersCm' | 'chestCm' | 'bicepsCm' | 'waistCm' | 'hipsCm' | 'thighCm';
 
 const BAND: Record<MeasurementZone, { y: number; height: number }> = {
+  shouldersCm: { y: 44, height: 12 },
   chestCm: { y: 52, height: 18 },
+  bicepsCm: { y: 68, height: 14 },
   waistCm: { y: 76, height: 16 },
   hipsCm: { y: 96, height: 20 },
+  thighCm: { y: 145, height: 22 },
 };
 
 export type BodySilhouetteProps = {

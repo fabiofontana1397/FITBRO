@@ -4,6 +4,8 @@ import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
 import { MeasurementInfoModal } from '@/components/body/measurement-info-modal';
+import { MeasurementTrendModal } from '@/components/body/measurement-trend-modal';
+import { QuickMeasurementSheet } from '@/components/body/quick-measurement-sheet';
 import { QuickWeightSheet } from '@/components/body/quick-weight-sheet';
 import type { MeasurementZone } from '@/components/body/body-silhouette';
 import { ScreenHeader } from '@/components/screen-header';
@@ -14,18 +16,23 @@ import { Icon } from '@/components/ui/icon';
 import { InsightCard } from '@/components/ui/insight-card';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWeightSeries, weightDateGranularity, type WeightRange } from '@/hooks/use-weight-series';
-import { deltaFromPrevious, latestSnapshot } from '@/lib/mock/body';
+import { deltaFromPrevious, latestSnapshot, seriesOf } from '@/lib/mock/body';
 import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
 import { useBodyStore } from '@/store/body-store';
 import { useUserStore } from '@/store/user-store';
 
+// Top to bottom, roughly following the body itself.
 const MEASUREMENTS: { zone: MeasurementZone; label: string }[] = [
-  { zone: 'waistCm', label: 'Vita' },
+  { zone: 'shouldersCm', label: 'Spalle' },
   { zone: 'chestCm', label: 'Petto' },
+  { zone: 'bicepsCm', label: 'Bicipite' },
+  { zone: 'waistCm', label: 'Vita' },
   { zone: 'hipsCm', label: 'Fianchi' },
+  { zone: 'thighCm', label: 'Coscia' },
 ];
 
 export default function BodyScreen() {
@@ -34,10 +41,13 @@ export default function BodyScreen() {
   const entries = useBodyStore((s) => s.entries);
   const photos = useBodyStore((s) => s.photos);
   const addWeightEntry = useBodyStore((s) => s.addWeightEntry);
+  const addMeasurement = useBodyStore((s) => s.addMeasurement);
   const addPhoto = useBodyStore((s) => s.addPhoto);
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [infoZone, setInfoZone] = useState<MeasurementZone | null>(null);
+  const [trendMeasurement, setTrendMeasurement] = useState<{ zone: MeasurementZone; label: string } | null>(null);
+  const [addMeasurementZone, setAddMeasurementZone] = useState<{ zone: MeasurementZone; label: string } | null>(null);
   const [weightRange, setWeightRange] = useState<WeightRange>('settimana');
   const weightSeries = useWeightSeries(entries, weightRange);
 
@@ -113,6 +123,12 @@ export default function BodyScreen() {
                   <ThemedText type="small">{m.label}</ThemedText>
                   <ThemedText type="smallBold">{latest[m.zone]} cm</ThemedText>
                 </View>
+                <Pressable onPress={() => setTrendMeasurement(m)} hitSlop={8}>
+                  <TrendChart data={seriesOf(entries, m.zone)} width={56} height={28} color={theme.accent} />
+                </Pressable>
+                <Pressable onPress={() => setAddMeasurementZone(m)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.accentSoft }]}>
+                  <Icon name="plus" size={16} color={theme.accent} />
+                </Pressable>
                 <Pressable onPress={() => setInfoZone(m.zone)} hitSlop={8} style={[styles.infoButton, { backgroundColor: theme.backgroundElement }]}>
                   <Icon name="info" size={16} color={theme.textSecondary} />
                 </Pressable>
@@ -155,6 +171,22 @@ export default function BodyScreen() {
         onSave={(weightKg) => addWeightEntry(weightKg)}
       />
       <MeasurementInfoModal zone={infoZone} onClose={() => setInfoZone(null)} />
+      <MeasurementTrendModal
+        zone={trendMeasurement?.zone ?? null}
+        label={trendMeasurement?.label ?? ''}
+        entries={entries}
+        color={theme.accent}
+        onClose={() => setTrendMeasurement(null)}
+      />
+      <QuickMeasurementSheet
+        visible={addMeasurementZone != null}
+        label={addMeasurementZone?.label ?? ''}
+        currentValueCm={addMeasurementZone ? Number(latest[addMeasurementZone.zone]) : 0}
+        onClose={() => setAddMeasurementZone(null)}
+        onSave={(valueCm) => {
+          if (addMeasurementZone) addMeasurement({ [addMeasurementZone.zone]: valueCm });
+        }}
+      />
     </ScreenScroll>
   );
 }
