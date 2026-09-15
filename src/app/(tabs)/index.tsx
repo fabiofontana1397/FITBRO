@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { GlassSurface } from '@/components/glass/glass-surface';
-import { GoalTrendChart, type WeightPoint } from '@/components/ui/goal-trend-chart';
+import { GoalTrendChart } from '@/components/ui/goal-trend-chart';
 import { InsightCard } from '@/components/ui/insight-card';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -15,9 +15,10 @@ import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWeightSeries, weightDateGranularity, type WeightRange } from '@/hooks/use-weight-series';
 import { dailyStepsTarget, stepsHistory } from '@/lib/mock/activity';
 import { latestSnapshot } from '@/lib/mock/body';
-import { currentWeekDates, daysAgoISO, mondayIndex, monthShortLabel, weekdayShort } from '@/lib/mock/dates';
+import { currentWeekDates, daysAgoISO, mondayIndex } from '@/lib/mock/dates';
 import { insights } from '@/lib/mock/progress';
 import { estimateDailyBurnedKcal, estimateStepsKcal, estimateTrainingBonusKcal } from '@/lib/nutrition/targets';
 import { WEEKDAY_LABELS } from '@/lib/planning/exercise-library';
@@ -111,58 +112,8 @@ export default function HomeScreen() {
   });
   const todayStepsKcal = estimateStepsKcal(todaysSteps, latestBody.weightKg);
 
-  // Week/month/year switches which fixed set of axis slots the chart shows
-  // — days of this week, days of this month, months of this year — each
-  // slot keeping its gridline/label even when nothing was logged for it
-  // yet, so the axes always read as a complete chart rather than only
-  // appearing once data exists.
-  const [weightRange, setWeightRange] = useState<'settimana' | 'mese' | 'anno'>('settimana');
-  const weightSeries = useMemo<WeightPoint[]>(() => {
-    const byDate = new Map<string, number[]>();
-    for (const e of bodyEntries) {
-      const bucket = byDate.get(e.date) ?? [];
-      bucket.push(e.weightKg);
-      byDate.set(e.date, bucket);
-    }
-    const avgFor = (date: string) => {
-      const values = byDate.get(date);
-      if (!values || values.length === 0) return null;
-      return Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 10) / 10;
-    };
-
-    const now = new Date();
-
-    if (weightRange === 'settimana') {
-      return currentWeekDates(now).map((date) => ({ xLabel: weekdayShort(date), value: avgFor(date), date }));
-    }
-
-    if (weightRange === 'mese') {
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const dayCount = new Date(year, month + 1, 0).getDate();
-      return Array.from({ length: dayCount }, (_, i) => {
-        const date = `${year}-${(month + 1).toString().padStart(2, '0')}-${(i + 1).toString().padStart(2, '0')}`;
-        return { xLabel: `${i + 1}`, value: avgFor(date), date };
-      });
-    }
-
-    // anno
-    const year = now.getFullYear();
-    const sums = Array.from({ length: 12 }, () => ({ sum: 0, count: 0 }));
-    for (const [date, values] of byDate) {
-      const d = new Date(date);
-      if (d.getFullYear() !== year) continue;
-      const bucket = sums[d.getMonth()];
-      bucket.sum += values.reduce((sum, v) => sum + v, 0);
-      bucket.count += values.length;
-    }
-    return sums.map((bucket, i) => ({
-      xLabel: monthShortLabel(year, i),
-      value: bucket.count > 0 ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null,
-      date: `${year}-${(i + 1).toString().padStart(2, '0')}-01`,
-    }));
-  }, [bodyEntries, weightRange]);
-  const weightDateGranularity = weightRange === 'anno' ? 'month' : 'day';
+  const [weightRange, setWeightRange] = useState<WeightRange>('settimana');
+  const weightSeries = useWeightSeries(bodyEntries, weightRange);
 
   // One entry per weekday of the CURRENT calendar week — past days read
   // from what was actually logged, today is live, and days still ahead
@@ -289,7 +240,7 @@ export default function HomeScreen() {
           <GoalTrendChart
             points={weightSeries}
             target={currentUser.targetWeightKg}
-            dateGranularity={weightDateGranularity}
+            dateGranularity={weightDateGranularity(weightRange)}
             height={240}
             color={theme.accent}
             targetColor={theme.success}

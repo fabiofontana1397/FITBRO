@@ -9,13 +9,15 @@ import type { MeasurementZone } from '@/components/body/body-silhouette';
 import { ScreenHeader } from '@/components/screen-header';
 import { ScreenScroll } from '@/components/screen-scroll';
 import { ThemedText } from '@/components/themed-text';
+import { GoalTrendChart } from '@/components/ui/goal-trend-chart';
 import { Icon } from '@/components/ui/icon';
 import { InsightCard } from '@/components/ui/insight-card';
 import { SectionHeader } from '@/components/ui/section-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { StatTile } from '@/components/ui/stat-tile';
-import { TrendChart } from '@/components/ui/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWeightSeries, weightDateGranularity, type WeightRange } from '@/hooks/use-weight-series';
 import { deltaFromPrevious, latestSnapshot, percentChange, seriesOf } from '@/lib/mock/body';
 import { generatePhotoInsight } from '@/lib/assistant/photo-insight';
 import { useBodyStore } from '@/store/body-store';
@@ -37,6 +39,8 @@ export default function BodyScreen() {
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [infoZone, setInfoZone] = useState<MeasurementZone | null>(null);
+  const [weightRange, setWeightRange] = useState<WeightRange>('settimana');
+  const weightSeries = useWeightSeries(entries, weightRange);
 
   const latest = latestSnapshot(entries);
   const weightDelta = deltaFromPrevious(entries, 'weightKg');
@@ -79,7 +83,25 @@ export default function BodyScreen() {
             <Icon name="plus" size={20} color={theme.onAccent} />
           </Pressable>
         </View>
-        <TrendChart data={seriesOf(entries, 'weightKg')} width={296} height={90} color={theme.accent} />
+        <SegmentedControl
+          options={[
+            { value: 'settimana', label: 'Settimana' },
+            { value: 'mese', label: 'Mese' },
+            { value: 'anno', label: 'Anno' },
+          ]}
+          value={weightRange}
+          onChange={(v) => setWeightRange(v as WeightRange)}
+        />
+        <GoalTrendChart
+          points={weightSeries}
+          target={currentUser.targetWeightKg}
+          dateGranularity={weightDateGranularity(weightRange)}
+          height={240}
+          color={theme.accent}
+          targetColor={theme.success}
+          axisColor={theme.textTertiary}
+          gridColor={theme.backgroundElement}
+        />
       </GlassSurface>
 
       <View style={styles.statsRow}>
@@ -160,7 +182,6 @@ const styles = StyleSheet.create({
   heroCard: {
     padding: Spacing.four,
     gap: Spacing.three,
-    alignItems: 'center',
   },
   heroTop: {
     flexDirection: 'row',
